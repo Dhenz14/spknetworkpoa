@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Upload, File, Search, Copy, CheckCircle2, Clock, ShieldCheck, AlertCircle, Users, Coins, AlertTriangle, XCircle, Ban } from "lucide-react";
+import { Upload, File, Search, Copy, CheckCircle2, Clock, ShieldCheck, AlertCircle, Users, Coins, AlertTriangle, XCircle, Ban, Wifi, Network } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -13,9 +13,12 @@ import { Progress } from "@/components/ui/progress";
 
 export default function Storage() {
   const { toast } = useToast();
-  const [isUploading, setIsUploading] = useState(false);
   
-  // Mock Reputation Score (0-100)
+  // New State for "Seeding" simulation
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'seeding' | 'complete'>('idle');
+  const [seedPeers, setSeedPeers] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
   const reputation = 82;
 
   const [files, setFiles] = useState([
@@ -27,13 +30,59 @@ export default function Storage() {
   ]);
 
   const handleUpload = () => {
-    setIsUploading(true);
-    setTimeout(() => {
-      setIsUploading(false);
-      toast({
-        title: "File Uploaded",
-        description: "Content successfully pinned to IPFS and broadcasted to Hive.",
+    // Phase 1: Local IPFS Add
+    setUploadStatus('uploading');
+    setUploadProgress(0);
+    
+    // Simulate progress
+    const interval = setInterval(() => {
+      setUploadProgress(p => {
+        if (p >= 100) {
+          clearInterval(interval);
+          startSeeding();
+          return 100;
+        }
+        return p + 10;
       });
+    }, 200);
+  };
+
+  const startSeeding = () => {
+    // Phase 2: Swarm Discovery
+    setUploadStatus('seeding');
+    toast({
+      title: "File Added to Local Node",
+      description: "Broadcasting availability to the swarm. Please keep this tab open.",
+    });
+
+    // Simulate peers connecting
+    let peers = 0;
+    const seedInterval = setInterval(() => {
+      peers++;
+      setSeedPeers(peers);
+      if (peers >= 3) {
+        clearInterval(seedInterval);
+        setUploadStatus('complete');
+        toast({
+          title: "Replication Complete",
+          description: "3 Storage Nodes have picked up your content. It is now persistent.",
+        });
+        // Add new file to list
+        setFiles(prev => [{
+            id: Date.now(), 
+            name: "new_upload.mp4", 
+            cid: "QmNew...Upl", 
+            size: "15 MB", 
+            status: "Pinned", 
+            date: "Just now", 
+            proofs: 0, fails: 0, 
+            lastProof: "Pending", 
+            replication: 3, 
+            confidence: 100, 
+            poaEnabled: true 
+        }, ...prev]);
+        setTimeout(() => setUploadStatus('idle'), 3000);
+      }
     }, 1500);
   };
 
@@ -71,16 +120,36 @@ export default function Storage() {
           <p className="text-muted-foreground mt-1">Manage your IPFS pins and content proofs</p>
         </div>
         <div className="flex items-center gap-4">
-          <Button onClick={handleUpload} disabled={isUploading} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-            {isUploading ? (
-              <>
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"/>
-                Pinning...
-              </>
-            ) : (
+          <Button 
+            onClick={handleUpload} 
+            disabled={uploadStatus !== 'idle'} 
+            className={cn(
+              "transition-all duration-500",
+              uploadStatus === 'seeding' ? "bg-green-500 hover:bg-green-600 w-48" : "bg-primary hover:bg-primary/90"
+            )}
+          >
+            {uploadStatus === 'idle' && (
               <>
                 <Upload className="w-4 h-4 mr-2" />
                 Upload Content
+              </>
+            )}
+            {uploadStatus === 'uploading' && (
+              <>
+                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"/>
+                 Hashing... {uploadProgress}%
+              </>
+            )}
+            {uploadStatus === 'seeding' && (
+              <>
+                 <Wifi className="w-4 h-4 mr-2 animate-pulse" />
+                 Seeding... ({seedPeers} Peers)
+              </>
+            )}
+            {uploadStatus === 'complete' && (
+              <>
+                 <CheckCircle2 className="w-4 h-4 mr-2" />
+                 Complete
               </>
             )}
           </Button>
