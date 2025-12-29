@@ -12,11 +12,11 @@ export default function Validators() {
   const { toast } = useToast();
 
   const validators = [
-    { rank: 5, name: "threespeak", hiveRank: 5, status: "Online", peers: 124, payout: "1.00 HBD", version: "v0.1.0" },
-    { rank: 12, name: "hive-kings", hiveRank: 12, status: "Online", peers: 89, payout: "0.95 HBD", version: "v0.1.0" },
-    { rank: 45, name: "arcange", hiveRank: 45, status: "Online", peers: 256, payout: "1.00 HBD", version: "v0.1.0" },
-    { rank: 88, name: "pizza-witness", hiveRank: 88, status: "Syncing", peers: 12, payout: "0.90 HBD", version: "v0.0.9" },
-    { rank: 142, name: "smaller-guy", hiveRank: 142, status: "Offline", peers: 0, payout: "1.00 HBD", version: "v0.1.0" },
+    { rank: 1, name: "threespeak", hiveRank: 5, status: "Online", peers: 124, payout: "1.00 HBD", version: "v0.1.0", performance: 98, trusted: true },
+    { rank: 2, name: "arcange", hiveRank: 45, status: "Online", peers: 256, payout: "1.00 HBD", version: "v0.1.0", performance: 96, trusted: true },
+    { rank: 3, name: "hive-kings", hiveRank: 12, status: "Online", peers: 89, payout: "0.95 HBD", version: "v0.1.0", performance: 92, trusted: true },
+    { rank: 4, name: "pizza-witness", hiveRank: 88, status: "Syncing", peers: 12, payout: "0.90 HBD", version: "v0.0.9", performance: 78, trusted: false },
+    { rank: 5, name: "smaller-guy", hiveRank: 142, status: "Offline", peers: 0, payout: "1.00 HBD", version: "v0.1.0", performance: 45, trusted: false },
   ];
 
   const handleConnect = (name: string) => {
@@ -33,7 +33,7 @@ export default function Validators() {
           <h1 className="text-3xl font-display font-bold">Network Validators</h1>
           <p className="text-muted-foreground mt-1">
             Top 150 Hive Witnesses running the HivePoA protocol. 
-            Connect to a validator to start earning HBD.
+            Connect to high-ranking validators to ensure reliable HBD rewards.
           </p>
         </div>
         
@@ -55,9 +55,11 @@ export default function Validators() {
           <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
               <CardTitle>Active Witness Gateways</CardTitle>
-              <div className="relative w-64">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search witness..." className="pl-8" />
+              <div className="flex gap-2">
+                <div className="relative w-64">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input placeholder="Search witness..." className="pl-8" />
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -65,9 +67,17 @@ export default function Validators() {
                 {validators.map((val) => (
                   <div key={val.rank} className="flex items-center justify-between p-4 rounded-lg bg-card border border-border/50 hover:border-primary/30 transition-all group">
                     <div className="flex items-center gap-4">
-                      <div className="font-mono text-xs text-muted-foreground w-12 text-center bg-muted/50 rounded py-1">
-                        #{val.hiveRank}
+                      <div className="flex flex-col items-center gap-1 w-12">
+                         <div className="font-mono text-xs text-muted-foreground bg-muted/50 rounded py-1 px-2">
+                           #{val.hiveRank}
+                         </div>
+                         {val.trusted && (
+                           <Badge variant="secondary" className="text-[10px] h-4 px-1 bg-blue-500/10 text-blue-500 border-blue-500/20">
+                             Trusted
+                           </Badge>
+                         )}
                       </div>
+                      
                       <Avatar>
                         <AvatarImage src={`https://images.hive.blog/u/${val.name}/avatar`} />
                         <AvatarFallback>{val.name.substring(0, 2).toUpperCase()}</AvatarFallback>
@@ -86,11 +96,26 @@ export default function Validators() {
                         </div>
                       </div>
                     </div>
+
                     <div className="flex items-center gap-6">
                       <div className="text-right hidden sm:block">
-                         <div className="text-xs text-muted-foreground mb-1">Avg. Payout</div>
-                         <div className="font-mono font-medium text-green-500">{val.payout}</div>
+                         <div className="text-xs text-muted-foreground mb-1">Performance</div>
+                         <div className="flex items-center gap-2 justify-end">
+                            <span className={cn(
+                              "font-mono font-bold",
+                              val.performance > 90 ? "text-green-500" : val.performance > 70 ? "text-yellow-500" : "text-red-500"
+                            )}>{val.performance}/100</span>
+                         </div>
+                         <Progress value={val.performance} className="h-1.5 w-24 mt-1 bg-secondary" indicatorClassName={
+                            val.performance > 90 ? "bg-green-500" : val.performance > 70 ? "bg-yellow-500" : "bg-red-500"
+                         }/>
                       </div>
+                      
+                      <div className="text-right hidden sm:block w-20">
+                         <div className="text-xs text-muted-foreground mb-1">Payout</div>
+                         <div className="font-mono font-medium">{val.payout}</div>
+                      </div>
+
                       <Button size="sm" variant={val.status === "Offline" ? "ghost" : "default"} disabled={val.status === "Offline"} onClick={() => handleConnect(val.name)}>
                         {val.status === "Offline" ? "Unavailable" : "Connect"}
                       </Button>

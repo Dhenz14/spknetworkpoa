@@ -4,13 +4,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { ShieldAlert, Key, Wallet, Save, AlertTriangle } from "lucide-react";
+import { ShieldAlert, Key, Wallet, Save, AlertTriangle, Filter, Lock } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { Slider } from "@/components/ui/slider";
 
 export default function ValidatorSettings() {
   const { toast } = useToast();
   const [isSaved, setIsSaved] = useState(false);
+  const [minRep, setMinRep] = useState([50]);
 
   const handleSave = () => {
     setIsSaved(true);
@@ -28,6 +30,56 @@ export default function ValidatorSettings() {
       </div>
 
       <div className="grid gap-6">
+        
+        {/* Audit Policy (Filtering) - NEW SECTION */}
+        <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+           <CardHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-purple-500/10 rounded-lg text-purple-500">
+                <Filter className="w-5 h-5" />
+              </div>
+              <div>
+                <CardTitle>Audit Policy</CardTitle>
+                <CardDescription>Filter which storage nodes you are willing to audit & reward</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-4">
+               <div className="flex justify-between items-center">
+                  <Label>Minimum Node Reputation Score</Label>
+                  <span className="font-mono font-bold text-primary">{minRep[0]}</span>
+               </div>
+               <Slider 
+                 value={minRep} 
+                 onValueChange={setMinRep} 
+                 max={100} 
+                 step={1} 
+                 className="py-4"
+               />
+               <p className="text-xs text-muted-foreground">
+                 Nodes with a reputation below {minRep[0]} will be ignored by your validator.
+               </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+               <div className="grid gap-2">
+                  <Label>Required Stake (Collateral)</Label>
+                  <div className="relative">
+                     <Lock className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
+                     <Input placeholder="0.00" className="pl-9 font-mono" defaultValue="10.00" />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Min. HBD in node's savings</p>
+               </div>
+               <div className="grid gap-2">
+                  <Label>Content Tag Filter</Label>
+                  <Input placeholder="e.g. #hive, #threespeak" />
+                  <p className="text-[10px] text-muted-foreground">Comma separated whitelist</p>
+               </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* HBD Treasury Settings */}
         <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
           <CardHeader>
