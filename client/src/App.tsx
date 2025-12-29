@@ -9,6 +9,7 @@ import Dashboard from "@/pages/dashboard";
 import Storage from "@/pages/storage";
 import Wallet from "@/pages/wallet";
 import NodeStatus from "@/pages/node";
+import ValidatorSettings from "@/pages/settings";
 import generatedImage from '@assets/generated_images/a_dark,_futuristic_abstract_mesh_background_with_red_accents..png';
 
 function Router() {
@@ -19,6 +20,7 @@ function Router() {
         <Route path="/storage" component={Storage} />
         <Route path="/wallet" component={Wallet} />
         <Route path="/node" component={NodeStatus} />
+        <Route path="/settings" component={ValidatorSettings} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
