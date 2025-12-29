@@ -2,7 +2,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Upload, File, Search, Copy, CheckCircle2, Clock, ShieldCheck, AlertCircle, Users } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Upload, File, Search, Copy, CheckCircle2, Clock, ShieldCheck, AlertCircle, Users, Coins } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -11,6 +13,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 export default function Storage() {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
+  const [files, setFiles] = useState([
+    { id: 1, name: "project_specs_v2.pdf", cid: "QmX7...9jK", size: "2.4 MB", status: "Pinned", date: "2025-05-20", proofs: 142, lastProof: "2m ago", replication: 12, confidence: 98, poaEnabled: true },
+    { id: 2, name: "assets_bundle.zip", cid: "QmY8...2mL", size: "156 MB", status: "Pinned", date: "2025-05-19", proofs: 89, lastProof: "15m ago", replication: 8, confidence: 92, poaEnabled: true },
+    { id: 3, name: "intro_video.mp4", cid: "QmZ9...4nPx", size: "45 MB", status: "Syncing", date: "2025-05-19", proofs: 0, lastProof: "N/A", replication: 1, confidence: 0, poaEnabled: false },
+    { id: 4, name: "dataset_01.json", cid: "QmA1...5oQ", size: "12 KB", status: "Pinned", date: "2025-05-18", proofs: 450, lastProof: "5m ago", replication: 45, confidence: 99, poaEnabled: true },
+    { id: 5, name: "backup_log.txt", cid: "QmB2...6pR", size: "1.1 MB", status: "Pinned", date: "2025-05-18", proofs: 12, lastProof: "1h ago", replication: 4, confidence: 75, poaEnabled: false },
+  ]);
 
   const handleUpload = () => {
     setIsUploading(true);
@@ -23,13 +32,29 @@ export default function Storage() {
     }, 1500);
   };
 
-  const files = [
-    { name: "project_specs_v2.pdf", cid: "QmX7...9jK", size: "2.4 MB", status: "Pinned", date: "2025-05-20", proofs: 142, lastProof: "2m ago", replication: 12, confidence: 98 },
-    { name: "assets_bundle.zip", cid: "QmY8...2mL", size: "156 MB", status: "Pinned", date: "2025-05-19", proofs: 89, lastProof: "15m ago", replication: 8, confidence: 92 },
-    { name: "intro_video.mp4", cid: "QmZ9...4nPx", size: "45 MB", status: "Syncing", date: "2025-05-19", proofs: 0, lastProof: "N/A", replication: 1, confidence: 0 },
-    { name: "dataset_01.json", cid: "QmA1...5oQ", size: "12 KB", status: "Pinned", date: "2025-05-18", proofs: 450, lastProof: "5m ago", replication: 45, confidence: 99 },
-    { name: "backup_log.txt", cid: "QmB2...6pR", size: "1.1 MB", status: "Pinned", date: "2025-05-18", proofs: 12, lastProof: "1h ago", replication: 4, confidence: 75 },
-  ];
+  const togglePoa = (id: number) => {
+    setFiles(files.map(f => {
+      if (f.id === id) {
+        const newState = !f.poaEnabled;
+        toast({
+          title: newState ? "Rewards Enabled" : "Rewards Disabled",
+          description: `PoA challenges ${newState ? "enabled" : "disabled"} for ${f.name}`,
+        });
+        return { ...f, poaEnabled: newState };
+      }
+      return f;
+    }));
+  };
+
+  const toggleAll = (enabled: boolean) => {
+    setFiles(files.map(f => ({ ...f, poaEnabled: enabled })));
+    toast({
+      title: enabled ? "All Rewards Enabled" : "All Rewards Paused",
+      description: `PoA challenges ${enabled ? "enabled" : "paused"} for all files.`,
+    });
+  };
+
+  const allEnabled = files.every(f => f.poaEnabled);
 
   return (
     <div className="p-8 space-y-8 max-w-7xl mx-auto">
@@ -38,19 +63,29 @@ export default function Storage() {
           <h1 className="text-3xl font-display font-bold">Storage Management</h1>
           <p className="text-muted-foreground mt-1">Manage your IPFS pins and content proofs</p>
         </div>
-        <Button onClick={handleUpload} disabled={isUploading} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-          {isUploading ? (
-            <>
-              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"/>
-              Pinning...
-            </>
-          ) : (
-            <>
-              <Upload className="w-4 h-4 mr-2" />
-              Upload Content
-            </>
-          )}
-        </Button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 px-4 py-2 bg-card border border-border/50 rounded-lg">
+            <Label htmlFor="all-rewards" className="text-sm font-medium cursor-pointer">Enable All Rewards</Label>
+            <Switch 
+              id="all-rewards" 
+              checked={allEnabled}
+              onCheckedChange={toggleAll}
+            />
+          </div>
+          <Button onClick={handleUpload} disabled={isUploading} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+            {isUploading ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"/>
+                Pinning...
+              </>
+            ) : (
+              <>
+                <Upload className="w-4 h-4 mr-2" />
+                Upload Content
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
@@ -69,13 +104,14 @@ export default function Storage() {
                 <TableHead>CID</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead>Network Health</TableHead>
+                <TableHead>Reward Status</TableHead>
                 <TableHead>Proof Stats</TableHead>
                 <TableHead className="text-right">Last Verified</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {files.map((file, i) => (
-                <TableRow key={i} className="hover:bg-primary/5 border-border/50 group transition-colors">
+              {files.map((file) => (
+                <TableRow key={file.id} className="hover:bg-primary/5 border-border/50 group transition-colors">
                   <TableCell className="font-medium flex items-center gap-2">
                     <File className="w-4 h-4 text-primary" />
                     {file.name}
@@ -112,10 +148,25 @@ export default function Storage() {
                     </div>
                   </TableCell>
                   <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        checked={file.poaEnabled} 
+                        onCheckedChange={() => togglePoa(file.id)}
+                        className="scale-75 data-[state=checked]:bg-green-500"
+                      />
+                      <span className={cn(
+                        "text-xs font-medium",
+                        file.poaEnabled ? "text-green-500" : "text-muted-foreground"
+                      )}>
+                        {file.poaEnabled ? "Earning" : "Paused"}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
                     {file.status === "Pinned" ? (
-                      <div className="flex items-center gap-2 text-xs">
-                        <CheckCircle2 className="w-4 h-4 text-green-500" />
-                        <span className="font-mono text-green-500">{file.proofs} Proofs</span>
+                      <div className={cn("flex items-center gap-2 text-xs", !file.poaEnabled && "opacity-50")}>
+                        <Coins className={cn("w-4 h-4", file.poaEnabled ? "text-yellow-500" : "text-muted-foreground")} />
+                        <span className="font-mono">{file.proofs} Proofs</span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
