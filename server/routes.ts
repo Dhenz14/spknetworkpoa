@@ -4,7 +4,8 @@ import { storage } from "./storage";
 import { hiveSimulator } from "./services/hive-simulator";
 import { poaEngine } from "./services/poa-engine";
 import { WebSocketServer } from "ws";
-import { insertFileSchema } from "@shared/schema";
+import { insertFileSchema, insertValidatorBlacklistSchema } from "@shared/schema";
+import { z } from "zod";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -79,8 +80,14 @@ export async function registerRoutes(
 
   // Storage Nodes API
   app.get("/api/nodes", async (req, res) => {
-    const nodes = await storage.getAllStorageNodes();
-    res.json(nodes);
+    const search = req.query.search as string | undefined;
+    if (search) {
+      const nodes = await storage.searchStorageNodes(search);
+      res.json(nodes);
+    } else {
+      const nodes = await storage.getAllStorageNodes();
+      res.json(nodes);
+    }
   });
 
   app.get("/api/nodes/:peerId", async (req, res) => {
@@ -103,6 +110,57 @@ export async function registerRoutes(
       return res.status(404).json({ error: "Validator not found" });
     }
     res.json(validator);
+  });
+
+  // Validator Blacklist API
+  app.get("/api/validators/:username/blacklist", async (req, res) => {
+    const validator = await storage.getValidatorByUsername(req.params.username);
+    if (!validator) {
+      return res.status(404).json({ error: "Validator not found" });
+    }
+    const blacklist = await storage.getValidatorBlacklist(validator.id);
+    res.json(blacklist);
+  });
+
+  app.post("/api/validators/:username/blacklist", async (req, res) => {
+    try {
+      const validator = await storage.getValidatorByUsername(req.params.username);
+      if (!validator) {
+        return res.status(404).json({ error: "Validator not found" });
+      }
+      
+      const schema = z.object({
+        nodeId: z.string(),
+        reason: z.string().min(1),
+      });
+      const { nodeId, reason } = schema.parse(req.body);
+      
+      const node = await storage.getStorageNode(nodeId);
+      if (!node) {
+        return res.status(404).json({ error: "Storage node not found" });
+      }
+      
+      const entry = await storage.addToBlacklist({
+        validatorId: validator.id,
+        nodeId,
+        reason,
+        active: true,
+      });
+      
+      res.json(entry);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/validators/:username/blacklist/:nodeId", async (req, res) => {
+    const validator = await storage.getValidatorByUsername(req.params.username);
+    if (!validator) {
+      return res.status(404).json({ error: "Validator not found" });
+    }
+    
+    await storage.removeFromBlacklist(validator.id, req.params.nodeId);
+    res.json({ success: true });
   });
 
   // PoA Challenges API

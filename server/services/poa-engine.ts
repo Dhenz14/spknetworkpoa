@@ -95,7 +95,8 @@ export class PoAEngine {
   private async runChallenge() {
     if (!this.validatorId) return;
 
-    const nodes = await storage.getAllStorageNodes();
+    // Get only eligible nodes (excludes blacklisted ones)
+    const nodes = await storage.getEligibleNodesForValidator(this.validatorId);
     if (nodes.length === 0) return;
 
     const randomNode = nodes[Math.floor(Math.random() * nodes.length)];
