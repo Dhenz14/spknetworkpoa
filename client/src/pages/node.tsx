@@ -110,8 +110,8 @@ export default function NodeStatus() {
             <div className="pt-4 border-t border-border/50 space-y-4">
                <div className="flex items-center justify-between space-x-2">
                 <div className="space-y-0.5">
-                  <Label htmlFor="validator-mode">Validator Service</Label>
-                  <p className="text-xs text-muted-foreground">Run PoA challenges</p>
+                  <Label htmlFor="validator-mode">Police Mode (PoA Auditor)</Label>
+                  <p className="text-xs text-muted-foreground">Run cryptographic challenges to audit storage nodes</p>
                 </div>
                 <Switch id="validator-mode" checked={true} disabled />
               </div>

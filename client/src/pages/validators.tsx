@@ -110,7 +110,7 @@ export default function Validators() {
                          <div className="flex items-center gap-2 justify-end">
                             <span className="font-mono font-bold text-sm">{val.jobAllocation}%</span>
                          </div>
-                         <Progress value={val.jobAllocation} className="h-1.5 mt-1 bg-secondary" indicatorClassName="bg-primary"/>
+                         <Progress value={val.jobAllocation} className="h-1.5 mt-1 bg-secondary" />
                       </div>
 
                       <div className="text-right hidden sm:block w-20">
