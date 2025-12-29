@@ -273,6 +273,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteFile(id: string): Promise<boolean> {
+    // Get contracts associated with this file
+    const contracts = await db.select({ id: storageContracts.id })
+      .from(storageContracts)
+      .where(eq(storageContracts.fileId, id));
+    
+    // Delete contract events for each contract
+    for (const contract of contracts) {
+      await db.delete(contractEvents).where(eq(contractEvents.contractId, contract.id));
+    }
+    
+    // Delete related records (cascade)
+    await db.delete(fileChunks).where(eq(fileChunks.fileId, id));
+    await db.delete(fileTags).where(eq(fileTags.fileId, id));
+    await db.delete(transcodeJobs).where(eq(transcodeJobs.fileId, id));
+    await db.delete(viewEvents).where(eq(viewEvents.fileId, id));
+    await db.delete(storageContracts).where(eq(storageContracts.fileId, id));
+    
+    // Now delete the file
     const result = await db.delete(files).where(eq(files.id, id)).returning();
     return result.length > 0;
   }
