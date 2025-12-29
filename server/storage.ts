@@ -1,38 +1,194 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+// Integration: blueprint:javascript_database
+import { 
+  storageNodes, 
+  files,
+  validators,
+  storageAssignments,
+  poaChallenges,
+  hiveTransactions,
+  type StorageNode,
+  type InsertStorageNode,
+  type File,
+  type InsertFile,
+  type Validator,
+  type InsertValidator,
+  type PoaChallenge,
+  type InsertPoaChallenge,
+  type HiveTransaction,
+  type InsertHiveTransaction,
+  type StorageAssignment,
+} from "@shared/schema";
+import { db } from "./db";
+import { eq, desc, and, sql } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  // Storage Nodes
+  getStorageNode(id: string): Promise<StorageNode | undefined>;
+  getStorageNodeByPeerId(peerId: string): Promise<StorageNode | undefined>;
+  getAllStorageNodes(): Promise<StorageNode[]>;
+  createStorageNode(node: InsertStorageNode): Promise<StorageNode>;
+  updateStorageNodeReputation(id: string, reputation: number, status: string): Promise<void>;
+  
+  // Files
+  getFile(id: string): Promise<File | undefined>;
+  getFileByCid(cid: string): Promise<File | undefined>;
+  getAllFiles(): Promise<File[]>;
+  createFile(file: InsertFile): Promise<File>;
+  updateFileStatus(id: string, status: string, replicationCount: number, confidence: number): Promise<void>;
+  
+  // Validators
+  getValidator(id: string): Promise<Validator | undefined>;
+  getValidatorByUsername(username: string): Promise<Validator | undefined>;
+  getAllValidators(): Promise<Validator[]>;
+  createValidator(validator: InsertValidator): Promise<Validator>;
+  updateValidatorStats(id: string, peerCount: number, performance: number): Promise<void>;
+  
+  // PoA Challenges
+  createPoaChallenge(challenge: InsertPoaChallenge): Promise<PoaChallenge>;
+  getRecentChallenges(limit: number): Promise<PoaChallenge[]>;
+  updateChallengeResult(id: string, response: string, result: string, latencyMs: number): Promise<void>;
+  
+  // Hive Transactions
+  createHiveTransaction(transaction: InsertHiveTransaction): Promise<HiveTransaction>;
+  getRecentTransactions(limit: number): Promise<HiveTransaction[]>;
+  
+  // Storage Assignments
+  assignFileToNode(fileId: string, nodeId: string): Promise<void>;
+  getFileAssignments(fileId: string): Promise<StorageAssignment[]>;
+  updateAssignmentProof(fileId: string, nodeId: string, success: boolean): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DatabaseStorage implements IStorage {
+  // Storage Nodes
+  async getStorageNode(id: string): Promise<StorageNode | undefined> {
+    const [node] = await db.select().from(storageNodes).where(eq(storageNodes.id, id));
+    return node || undefined;
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getStorageNodeByPeerId(peerId: string): Promise<StorageNode | undefined> {
+    const [node] = await db.select().from(storageNodes).where(eq(storageNodes.peerId, peerId));
+    return node || undefined;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async getAllStorageNodes(): Promise<StorageNode[]> {
+    return await db.select().from(storageNodes).orderBy(desc(storageNodes.reputation));
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async createStorageNode(node: InsertStorageNode): Promise<StorageNode> {
+    const [created] = await db.insert(storageNodes).values(node).returning();
+    return created;
+  }
+
+  async updateStorageNodeReputation(id: string, reputation: number, status: string): Promise<void> {
+    await db.update(storageNodes)
+      .set({ reputation, status, lastSeen: new Date() })
+      .where(eq(storageNodes.id, id));
+  }
+
+  // Files
+  async getFile(id: string): Promise<File | undefined> {
+    const [file] = await db.select().from(files).where(eq(files.id, id));
+    return file || undefined;
+  }
+
+  async getFileByCid(cid: string): Promise<File | undefined> {
+    const [file] = await db.select().from(files).where(eq(files.cid, cid));
+    return file || undefined;
+  }
+
+  async getAllFiles(): Promise<File[]> {
+    return await db.select().from(files).orderBy(desc(files.createdAt));
+  }
+
+  async createFile(file: InsertFile): Promise<File> {
+    const [created] = await db.insert(files).values(file).returning();
+    return created;
+  }
+
+  async updateFileStatus(id: string, status: string, replicationCount: number, confidence: number): Promise<void> {
+    await db.update(files)
+      .set({ status, replicationCount, confidence })
+      .where(eq(files.id, id));
+  }
+
+  // Validators
+  async getValidator(id: string): Promise<Validator | undefined> {
+    const [validator] = await db.select().from(validators).where(eq(validators.id, id));
+    return validator || undefined;
+  }
+
+  async getValidatorByUsername(username: string): Promise<Validator | undefined> {
+    const [validator] = await db.select().from(validators).where(eq(validators.hiveUsername, username));
+    return validator || undefined;
+  }
+
+  async getAllValidators(): Promise<Validator[]> {
+    return await db.select().from(validators).orderBy(desc(validators.performance));
+  }
+
+  async createValidator(validator: InsertValidator): Promise<Validator> {
+    const [created] = await db.insert(validators).values(validator).returning();
+    return created;
+  }
+
+  async updateValidatorStats(id: string, peerCount: number, performance: number): Promise<void> {
+    await db.update(validators)
+      .set({ peerCount, performance })
+      .where(eq(validators.id, id));
+  }
+
+  // PoA Challenges
+  async createPoaChallenge(challenge: InsertPoaChallenge): Promise<PoaChallenge> {
+    const [created] = await db.insert(poaChallenges).values(challenge).returning();
+    return created;
+  }
+
+  async getRecentChallenges(limit: number): Promise<PoaChallenge[]> {
+    return await db.select().from(poaChallenges).orderBy(desc(poaChallenges.createdAt)).limit(limit);
+  }
+
+  async updateChallengeResult(id: string, response: string, result: string, latencyMs: number): Promise<void> {
+    await db.update(poaChallenges)
+      .set({ response, result, latencyMs })
+      .where(eq(poaChallenges.id, id));
+  }
+
+  // Hive Transactions
+  async createHiveTransaction(transaction: InsertHiveTransaction): Promise<HiveTransaction> {
+    const [created] = await db.insert(hiveTransactions).values(transaction).returning();
+    return created;
+  }
+
+  async getRecentTransactions(limit: number): Promise<HiveTransaction[]> {
+    return await db.select().from(hiveTransactions).orderBy(desc(hiveTransactions.createdAt)).limit(limit);
+  }
+
+  // Storage Assignments
+  async assignFileToNode(fileId: string, nodeId: string): Promise<void> {
+    await db.insert(storageAssignments).values({ fileId, nodeId });
+  }
+
+  async getFileAssignments(fileId: string): Promise<StorageAssignment[]> {
+    return await db.select().from(storageAssignments).where(eq(storageAssignments.fileId, fileId));
+  }
+
+  async updateAssignmentProof(fileId: string, nodeId: string, success: boolean): Promise<void> {
+    const [assignment] = await db.select().from(storageAssignments)
+      .where(and(
+        eq(storageAssignments.fileId, fileId),
+        eq(storageAssignments.nodeId, nodeId)
+      ));
+
+    if (assignment) {
+      await db.update(storageAssignments)
+        .set({
+          proofCount: success ? assignment.proofCount + 1 : assignment.proofCount,
+          failCount: success ? assignment.failCount : assignment.failCount + 1,
+          lastProofAt: new Date(),
+        })
+        .where(eq(storageAssignments.id, assignment.id));
+    }
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
