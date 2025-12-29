@@ -2,9 +2,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Upload, File, Search, Copy, CheckCircle2, Clock } from "lucide-react";
+import { Upload, File, Search, Copy, CheckCircle2, Clock, ShieldCheck, AlertCircle } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 export default function Storage() {
   const { toast } = useToast();
@@ -22,11 +23,11 @@ export default function Storage() {
   };
 
   const files = [
-    { name: "project_specs_v2.pdf", cid: "QmX7...9jK", size: "2.4 MB", status: "Pinned", date: "2025-05-20" },
-    { name: "assets_bundle.zip", cid: "QmY8...2mL", size: "156 MB", status: "Pinned", date: "2025-05-19" },
-    { name: "intro_video.mp4", cid: "QmZ9...4nPx", size: "45 MB", status: "Syncing", date: "2025-05-19" },
-    { name: "dataset_01.json", cid: "QmA1...5oQ", size: "12 KB", status: "Pinned", date: "2025-05-18" },
-    { name: "backup_log.txt", cid: "QmB2...6pR", size: "1.1 MB", status: "Pinned", date: "2025-05-18" },
+    { name: "project_specs_v2.pdf", cid: "QmX7...9jK", size: "2.4 MB", status: "Pinned", date: "2025-05-20", proofs: 142, lastProof: "2m ago" },
+    { name: "assets_bundle.zip", cid: "QmY8...2mL", size: "156 MB", status: "Pinned", date: "2025-05-19", proofs: 89, lastProof: "15m ago" },
+    { name: "intro_video.mp4", cid: "QmZ9...4nPx", size: "45 MB", status: "Syncing", date: "2025-05-19", proofs: 0, lastProof: "N/A" },
+    { name: "dataset_01.json", cid: "QmA1...5oQ", size: "12 KB", status: "Pinned", date: "2025-05-18", proofs: 450, lastProof: "5m ago" },
+    { name: "backup_log.txt", cid: "QmB2...6pR", size: "1.1 MB", status: "Pinned", date: "2025-05-18", proofs: 12, lastProof: "1h ago" },
   ];
 
   return (
@@ -53,7 +54,7 @@ export default function Storage() {
 
       <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-          <CardTitle className="font-display text-lg">Pinned Content</CardTitle>
+          <CardTitle className="font-display text-lg">Pinned Content & Proofs</CardTitle>
           <div className="relative w-64">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Search CID or name..." className="pl-8 bg-background/50" />
@@ -67,7 +68,8 @@ export default function Storage() {
                 <TableHead>CID</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Date</TableHead>
+                <TableHead>Proof Health</TableHead>
+                <TableHead className="text-right">Last Verified</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -97,7 +99,20 @@ export default function Storage() {
                       {file.status}
                     </span>
                   </TableCell>
-                  <TableCell className="text-right text-muted-foreground">{file.date}</TableCell>
+                  <TableCell>
+                    {file.status === "Pinned" ? (
+                      <div className="flex items-center gap-2 text-xs">
+                        <ShieldCheck className="w-4 h-4 text-green-500" />
+                        <span className="font-mono text-green-500">{file.proofs} Proofs</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                         <AlertCircle className="w-4 h-4" />
+                         <span>Pending Sync</span>
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground font-mono text-xs">{file.lastProof}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -107,5 +122,3 @@ export default function Storage() {
     </div>
   );
 }
-
-import { cn } from "@/lib/utils";

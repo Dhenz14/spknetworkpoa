@@ -1,153 +1,197 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Terminal, Play, Pause, RefreshCw, Shield } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { useState, useEffect, useRef } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Activity, HardDrive, Server, Shield, CheckCircle2, Clock, Zap, Database } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect } from "react";
+import { cn } from "@/lib/utils";
+
+// Types for our PoA simulation
+type ChallengeStage = 'idle' | 'challenging' | 'verifying' | 'rewarding';
 
 export default function NodeStatus() {
-  const [isRunning, setIsRunning] = useState(true);
+  const [stage, setStage] = useState<ChallengeStage>('idle');
+  const [lastProof, setLastProof] = useState<Date>(new Date());
+  const [challengeCount, setChallengeCount] = useState(1240);
   const [logs, setLogs] = useState<string[]>([
-    "[INFO] Trole Gateway initialized v0.1.0",
-    "[INFO] Hive connection established (wss://api.hive.blog)",
-    "[INFO] Loading local data stores...",
-    "[INFO] IPFS Daemon connected on port 5001",
-    "[INFO] PoA Validator module loaded",
-    "[INFO] Listening for proofs on channel: hive-poa-v1",
+    "[INFO] Node initialized. Listening for challenges...",
   ]);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Simulate the PoA Cycle
   useEffect(() => {
-    if (!isRunning) return;
-    
+    const cycle = async () => {
+      // 1. Idle -> Challenging
+      await wait(4000);
+      setStage('challenging');
+      addLog("[INFO] Incoming Challenge: Block #849201 from Validator");
+
+      // 2. Challenging -> Verifying (Node fetching data)
+      await wait(2000);
+      setStage('verifying');
+      addLog("[INFO] Retrieving chunk QmX7...9jK from IPFS Store...");
+      
+      // 3. Verifying -> Rewarding
+      await wait(1500);
+      setStage('rewarding');
+      addLog("[SUCCESS] Proof Submitted. Hash: 0x8f...2a");
+      addLog("[PAYMENT] HBD Reward Incoming: 0.050 HBD");
+      setChallengeCount(p => p + 1);
+      setLastProof(new Date());
+
+      // 4. Back to Idle
+      await wait(2000);
+      setStage('idle');
+      addLog("[INFO] Waiting for next challenge...");
+    };
+
     const interval = setInterval(() => {
-      const newLog = generateMockLog();
-      setLogs(prev => [...prev.slice(-50), newLog]);
-    }, 2000);
+      if (stage === 'idle') cycle();
+    }, 10000); // Run cycle every 10 seconds for demo purposes
 
     return () => clearInterval(interval);
-  }, [isRunning]);
+  }, []);
 
-  // Auto-scroll
-  useEffect(() => {
-    if (scrollRef.current) {
-      const scrollArea = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (scrollArea) {
-        scrollArea.scrollTop = scrollArea.scrollHeight;
-      }
-    }
-  }, [logs]);
+  const addLog = (msg: string) => {
+    setLogs(prev => [msg, ...prev].slice(0, 10));
+  };
+
+  const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
 
   return (
-    <div className="p-8 space-y-8 max-w-7xl mx-auto h-[calc(100vh-64px)] flex flex-col">
-      <div className="flex justify-between items-end">
-        <div>
-          <h1 className="text-3xl font-display font-bold">Node Status</h1>
-          <p className="text-muted-foreground mt-1">Technical monitoring and configuration</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setLogs([])}>
-            <RefreshCw className="w-4 h-4 mr-2" /> Clear Logs
-          </Button>
-          <Button 
-            variant={isRunning ? "destructive" : "default"} 
-            onClick={() => setIsRunning(!isRunning)}
-          >
-            {isRunning ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
-            {isRunning ? "Stop Node" : "Start Node"}
-          </Button>
-        </div>
+    <div className="p-8 space-y-8 max-w-7xl mx-auto flex flex-col h-[calc(100vh-64px)]">
+      <div>
+        <h1 className="text-3xl font-display font-bold">Proof of Access Protocol</h1>
+        <p className="text-muted-foreground mt-1">Real-time visualization of storage validation and HBD rewards</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
-        {/* Configuration Panel */}
-        <Card className="lg:col-span-1 border-border/50 bg-card/50 backdrop-blur-sm h-fit">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <SettingsIcon />
-              Configuration
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column: Visualizer */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="border-border/50 bg-black/40 backdrop-blur-xl h-[400px] relative overflow-hidden flex flex-col items-center justify-center">
+             {/* Background Grid */}
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_100%)] pointer-events-none" />
+            
+            <div className="relative z-10 w-full max-w-2xl px-12 flex justify-between items-center">
+              
+              {/* Validator Node */}
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-24 h-24 rounded-2xl bg-primary/10 border-2 border-primary/50 flex items-center justify-center relative shadow-[0_0_30px_rgba(227,19,55,0.2)]">
+                  <Shield className="w-10 h-10 text-primary" />
+                  <div className="absolute -top-2 -right-2 w-4 h-4 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_#22c55e]" />
+                </div>
+                <div className="text-center">
+                  <h3 className="font-display font-bold text-lg">Trole Validator</h3>
+                  <p className="text-xs text-muted-foreground font-mono">192.168.1.1</p>
+                </div>
+              </div>
+
+              {/* Connection Line */}
+              <div className="flex-1 h-[2px] bg-white/10 relative mx-8">
+                <AnimatePresence>
+                  {stage !== 'idle' && (
+                    <motion.div 
+                      className={cn(
+                        "absolute top-1/2 -translate-y-1/2 h-3 w-3 rounded-full shadow-[0_0_15px_currentColor]",
+                        stage === 'challenging' ? "bg-yellow-500 text-yellow-500" : 
+                        stage === 'verifying' ? "bg-blue-500 text-blue-500" : "bg-green-500 text-green-500"
+                      )}
+                      initial={{ left: "0%" }}
+                      animate={{ 
+                        left: stage === 'challenging' ? "100%" : 
+                              stage === 'verifying' ? "0%" : "100%" 
+                      }}
+                      transition={{ duration: 1.5, ease: "easeInOut" }}
+                    />
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Your Node */}
+              <div className="flex flex-col items-center gap-4">
+                <div className={cn(
+                  "w-24 h-24 rounded-2xl border-2 flex items-center justify-center relative transition-all duration-500",
+                  stage === 'verifying' ? "bg-blue-500/20 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)]" : "bg-card border-border"
+                )}>
+                  <Database className={cn(
+                    "w-10 h-10 transition-colors",
+                    stage === 'verifying' ? "text-blue-500" : "text-muted-foreground"
+                  )} />
+                </div>
+                <div className="text-center">
+                  <h3 className="font-display font-bold text-lg">Your Node</h3>
+                  <p className="text-xs text-muted-foreground font-mono">12D3...8kL</p>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Status Text */}
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
+              <Badge variant="outline" className={cn(
+                "px-4 py-1.5 text-sm font-mono border",
+                stage === 'idle' && "border-white/20 text-muted-foreground",
+                stage === 'challenging' && "border-yellow-500/50 text-yellow-500 bg-yellow-500/10",
+                stage === 'verifying' && "border-blue-500/50 text-blue-500 bg-blue-500/10",
+                stage === 'rewarding' && "border-green-500/50 text-green-500 bg-green-500/10",
+              )}>
+                STATUS: {stage.toUpperCase()}
+              </Badge>
+            </div>
+          </Card>
+
+          {/* Metrics */}
+          <div className="grid grid-cols-3 gap-4">
+            <MetricCard 
+              label="Total Proofs" 
+              value={challengeCount.toLocaleString()} 
+              icon={CheckCircle2} 
+              color="text-green-500" 
+            />
+            <MetricCard 
+              label="Success Rate" 
+              value="99.8%" 
+              icon={Activity} 
+              color="text-blue-500" 
+            />
+            <MetricCard 
+              label="Last Proof" 
+              value="Just now" 
+              icon={Clock} 
+              color="text-orange-500" 
+            />
+          </div>
+        </div>
+
+        {/* Right Column: Technical Logs */}
+        <Card className="border-border/50 bg-black/80 backdrop-blur-md flex flex-col h-full font-mono text-xs">
+          <CardHeader className="py-3 px-4 border-b border-white/10 bg-white/5">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Zap className="w-3 h-3 text-yellow-500" />
+              PoA Protocol Stream
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center justify-between space-x-2">
-              <div className="space-y-0.5">
-                <Label htmlFor="validator-mode">Validator Mode</Label>
-                <p className="text-xs text-muted-foreground">Run proofs for the network</p>
-              </div>
-              <Switch id="validator-mode" defaultChecked />
+          <div className="flex-1 p-4 overflow-hidden relative">
+            <div className="absolute inset-0 p-4 space-y-3 overflow-y-auto">
+              {logs.map((log, i) => (
+                <motion.div 
+                  key={i} 
+                  initial={{ opacity: 0, x: -10 }} 
+                  animate={{ opacity: 1, x: 0 }}
+                  className="flex gap-2"
+                >
+                  <span className="text-muted-foreground opacity-50">
+                    {new Date().toLocaleTimeString()}
+                  </span>
+                  <span className={cn(
+                    log.includes("[SUCCESS]") ? "text-green-400" : 
+                    log.includes("[PAYMENT]") ? "text-yellow-400 font-bold" :
+                    log.includes("[INFO]") ? "text-blue-300" : "text-gray-300"
+                  )}>
+                    {log}
+                  </span>
+                </motion.div>
+              ))}
             </div>
-            <div className="flex items-center justify-between space-x-2">
-              <div className="space-y-0.5">
-                <Label htmlFor="hive-rewards">Auto-Claim HBD</Label>
-                <p className="text-xs text-muted-foreground">Claim rewards automatically</p>
-              </div>
-              <Switch id="hive-rewards" defaultChecked />
-            </div>
-            <div className="flex items-center justify-between space-x-2">
-              <div className="space-y-0.5">
-                <Label htmlFor="ipfs-pinning">Aggressive Pinning</Label>
-                <p className="text-xs text-muted-foreground">Cache content proactively</p>
-              </div>
-              <Switch id="ipfs-pinning" />
-            </div>
-            
-            <div className="pt-4 border-t border-border/50">
-              <p className="text-sm font-medium mb-2">Node Info</p>
-              <div className="space-y-2 text-xs font-mono text-muted-foreground">
-                <div className="flex justify-between">
-                  <span>Peer ID:</span>
-                  <span className="text-primary">12D3...8kL</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Uptime:</span>
-                  <span>4d 12h 30m</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Version:</span>
-                  <span>v0.1.0-alpha</span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Terminal/Logs */}
-        <Card className="lg:col-span-2 border-border/50 bg-black/80 backdrop-blur-md font-mono text-sm border-primary/20 shadow-inner flex flex-col min-h-0">
-          <CardHeader className="py-3 px-4 border-b border-white/10 flex flex-row items-center justify-between bg-white/5">
-            <div className="flex items-center gap-2">
-              <Terminal className="w-4 h-4 text-primary" />
-              <span className="text-primary/80 font-bold">System Output</span>
-            </div>
-            <div className="flex gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
-              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
-              <div className="w-2.5 h-2.5 rounded-full bg-green-500/50" />
-            </div>
-          </CardHeader>
-          <div className="flex-1 relative min-h-0" ref={scrollRef}>
-             <ScrollArea className="h-full p-4">
-              <div className="space-y-1">
-                {logs.map((log, i) => (
-                  <div key={i} className="break-all">
-                    <span className="text-muted-foreground mr-2">
-                      {new Date().toLocaleTimeString()}
-                    </span>
-                    <span className={cn(
-                      log.includes("[ERROR]") ? "text-red-400" :
-                      log.includes("[WARN]") ? "text-yellow-400" :
-                      log.includes("[SUCCESS]") ? "text-green-400" :
-                      "text-blue-200"
-                    )}>
-                      {log}
-                    </span>
-                  </div>
-                ))}
-                {!isRunning && (
-                  <div className="text-yellow-500 mt-2 opacity-50">Node execution paused.</div>
-                )}
-              </div>
-            </ScrollArea>
           </div>
         </Card>
       </div>
@@ -155,39 +199,18 @@ export default function NodeStatus() {
   );
 }
 
-function SettingsIcon() {
+function MetricCard({ label, value, icon: Icon, color }: any) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="w-4 h-4"
-    >
-      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
+    <Card className="bg-card/50 border-border/50 backdrop-blur-sm">
+      <CardContent className="p-4 flex items-center gap-4">
+        <div className={cn("p-2 rounded-lg bg-white/5", color)}>
+          <Icon className="w-5 h-5" />
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{label}</p>
+          <p className="text-xl font-bold font-display">{value}</p>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
-
-function generateMockLog() {
-  const types = ["[INFO]", "[INFO]", "[INFO]", "[SUCCESS]", "[WARN]"];
-  const msgs = [
-    "Validating chunk QmX7...9jK",
-    "Peer 12D3...8kL requested block data",
-    "HBD Payment detected on chain",
-    "Proof of Access verified for user @hive.user",
-    "Garbage collection started",
-    "DHT routing table updated",
-    "Connection latency: 45ms",
-    "New block parsed: #84,120,102"
-  ];
-  const type = types[Math.floor(Math.random() * types.length)];
-  const msg = msgs[Math.floor(Math.random() * msgs.length)];
-  return `${type} ${msg}`;
-}
-
-import { cn } from "@/lib/utils";
