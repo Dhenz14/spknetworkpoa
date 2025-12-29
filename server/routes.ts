@@ -545,6 +545,35 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/files/:id", async (req, res) => {
+    try {
+      const file = await storage.getFile(req.params.id);
+      if (!file) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      
+      const deleted = await storage.deleteFile(req.params.id);
+      if (deleted) {
+        await storage.createHiveTransaction({
+          type: "spk_video_unpin",
+          fromUser: file.uploaderUsername,
+          toUser: null,
+          payload: JSON.stringify({
+            cid: file.cid,
+            name: file.name,
+            reason: "User requested deletion",
+          }),
+          blockNumber: Math.floor(Date.now() / 1000),
+        });
+        res.json({ success: true, message: "File unpinned and deleted" });
+      } else {
+        res.status(500).json({ error: "Failed to delete file" });
+      }
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // Storage Nodes API
   app.get("/api/nodes", async (req, res) => {
     const search = req.query.search as string | undefined;

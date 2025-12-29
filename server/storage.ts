@@ -93,6 +93,7 @@ export interface IStorage {
   getAllFiles(): Promise<File[]>;
   createFile(file: InsertFile): Promise<File>;
   updateFileStatus(id: string, status: string, replicationCount: number, confidence: number): Promise<void>;
+  deleteFile(id: string): Promise<boolean>;
   
   // Validators
   getValidator(id: string): Promise<Validator | undefined>;
@@ -269,6 +270,11 @@ export class DatabaseStorage implements IStorage {
   async createFile(file: InsertFile): Promise<File> {
     const [created] = await db.insert(files).values(file).returning();
     return created;
+  }
+
+  async deleteFile(id: string): Promise<boolean> {
+    const result = await db.delete(files).where(eq(files.id, id)).returning();
+    return result.length > 0;
   }
 
   async updateFileStatus(id: string, status: string, replicationCount: number, confidence: number): Promise<void> {
