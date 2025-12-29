@@ -1,10 +1,38 @@
-# HivePoA - Decentralized Storage Validation System
+# SPK Network 2.0 - Decentralized Storage Validation System
 
 ## Overview
 
-HivePoA is a decentralized storage validation protocol that integrates with the Hive blockchain for HBD (Hive Backed Dollar) payments. The system implements a Proof of Access (PoA) mechanism where Hive Witnesses act as validators ("Police") who audit Storage Nodes to verify they are physically storing the files they claim to hold. Storage providers earn HBD rewards for successfully passing cryptographic challenges, while validators manage the auditing process.
+SPK Network 2.0 (HivePoA) is a streamlined decentralized storage validation protocol that integrates with the Hive blockchain for HBD (Hive Backed Dollar) payments. This is an evolution of the original SPK Network, removing unnecessary complexity (Honeycomb, multiple tokens) while preserving the core innovation: **Proof of Access (PoA)**.
 
-The application is a full-stack web application with a React frontend and Express backend, using PostgreSQL for data persistence. It simulates the core PoA workflow including file uploads, storage node management, validator challenges, and HBD payment flows.
+The system implements a PoA mechanism where Hive Witnesses act as validators ("Police") who audit Storage Nodes to verify they are physically storing the files they claim to hold. Storage providers earn HBD rewards for successfully passing cryptographic challenges.
+
+The application is a full-stack web application with a React frontend and Express backend, using PostgreSQL for data persistence.
+
+## Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+| Document | Description |
+|----------|-------------|
+| [SPK Network 2.0 PoA Protocol](docs/SPK_NETWORK_2.0_POA.md) | Complete technical specification of the PoA algorithm |
+| [Architecture](docs/ARCHITECTURE.md) | System architecture, components, and data flow |
+| [Validator Guide](docs/VALIDATOR_GUIDE.md) | How to run a PoA validator node |
+| [Storage Node Guide](docs/STORAGE_NODE_GUIDE.md) | How to provide storage and earn HBD |
+
+## What Changed from SPK Network 1.0
+
+| Removed | Reason |
+|---------|--------|
+| Honeycomb | Unnecessary middleware layer |
+| LARYNX/BROCA/SPK tokens | Simplified to HBD only |
+| Complex tokenomics | Reduced speculation, increased utility |
+| libp2p PubSub | Replaced with WebSocket/REST |
+
+| Kept | Why |
+|------|-----|
+| PoA Algorithm | Core innovation - FNV-1a + SHA256 |
+| IPFS Integration | Standard for decentralized storage |
+| Hive Blockchain | Proven, fast, free transactions |
 
 ## User Preferences
 
