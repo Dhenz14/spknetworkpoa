@@ -79,6 +79,16 @@ export const hiveTransactions = pgTable("hive_transactions", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Validator Blacklist - nodes banned by specific validators
+export const validatorBlacklists = pgTable("validator_blacklists", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  validatorId: varchar("validator_id").notNull().references(() => validators.id),
+  nodeId: varchar("node_id").notNull().references(() => storageNodes.id),
+  reason: text("reason").notNull(),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Insert schemas
 export const insertStorageNodeSchema = createInsertSchema(storageNodes).omit({
   id: true,
@@ -106,6 +116,11 @@ export const insertHiveTransactionSchema = createInsertSchema(hiveTransactions).
   createdAt: true,
 });
 
+export const insertValidatorBlacklistSchema = createInsertSchema(validatorBlacklists).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type StorageNode = typeof storageNodes.$inferSelect;
 export type InsertStorageNode = z.infer<typeof insertStorageNodeSchema>;
@@ -123,3 +138,6 @@ export type HiveTransaction = typeof hiveTransactions.$inferSelect;
 export type InsertHiveTransaction = z.infer<typeof insertHiveTransactionSchema>;
 
 export type StorageAssignment = typeof storageAssignments.$inferSelect;
+
+export type ValidatorBlacklist = typeof validatorBlacklists.$inferSelect;
+export type InsertValidatorBlacklist = z.infer<typeof insertValidatorBlacklistSchema>;
