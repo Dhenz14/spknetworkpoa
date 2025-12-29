@@ -63,19 +63,25 @@ export default function NodeStatus() {
         const event = data.data;
         let logMessage = "";
 
-        switch (event.type) {
-          case "hbd_transfer":
-            logMessage = `[SUCCESS] HBD Payment: ${JSON.parse(event.payload).amount} to @${event.toUser}`;
-            break;
-          case "spk_reputation_slash":
-            logMessage = `[WARN] Reputation Slash: @${event.toUser} (${JSON.parse(event.payload).reason})`;
-            break;
-          case "spk_video_upload":
-            logMessage = `[INFO] New Upload: ${JSON.parse(event.payload).name}`;
-            break;
-          case "hivepoa_announce":
-            logMessage = `[INFO] Node Announce: ${JSON.parse(event.payload).peerId}`;
-            break;
+        try {
+          const payload = typeof event.payload === 'string' ? JSON.parse(event.payload) : event.payload;
+          
+          switch (event.type) {
+            case "hbd_transfer":
+              logMessage = `[SUCCESS] HBD Payment: ${payload.amount} to @${event.toUser}`;
+              break;
+            case "spk_reputation_slash":
+              logMessage = `[WARN] Reputation Slash: @${event.toUser} (${payload.reason})`;
+              break;
+            case "spk_video_upload":
+              logMessage = `[INFO] New Upload: ${payload.name}`;
+              break;
+            case "hivepoa_announce":
+              logMessage = `[INFO] Node Announce: ${payload.peerId}`;
+              break;
+          }
+        } catch (e) {
+          logMessage = `[INFO] Event: ${event.type}`;
         }
 
         if (logMessage) {
