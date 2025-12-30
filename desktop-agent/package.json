@@ -40,13 +40,12 @@
   "build": {
     "productName": "SPK Desktop Agent",
     "appId": "network.spk.desktop-agent",
-    "asar": true,
+    "asar": false,
     "directories": {
       "output": "build"
     },
     "files": [
       "dist/**/*",
-      "node_modules/**/*",
       "package.json"
     ],
     "extraResources": [
@@ -57,37 +56,15 @@
       }
     ],
     "mac": {
-      "icon": "assets/icon.icns",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": ["x64", "arm64"]
-        }
-      ],
+      "target": "dir",
       "category": "public.app-category.utilities"
     },
     "win": {
-      "icon": "assets/icon.ico",
-      "target": [
-        {
-          "target": "nsis",
-          "arch": ["x64"]
-        }
-      ]
+      "target": "dir"
     },
     "linux": {
-      "icon": "assets/icon.png",
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": ["x64"]
-        }
-      ],
+      "target": "dir",
       "category": "Utility"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
     }
   }
 }
