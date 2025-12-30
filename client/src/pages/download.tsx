@@ -19,21 +19,21 @@ const DOWNLOADS: Record<Platform, DownloadInfo> = {
     platform: "windows",
     label: "Windows",
     icon: <Monitor className="h-6 w-6" />,
-    filename: "spk-desktop_0.1.0_x64-setup.exe",
+    filename: "SPK Desktop_0.1.0_x64-setup.exe",
     description: "Windows 10/11 (64-bit)",
   },
   macos: {
     platform: "macos",
     label: "macOS (Intel)",
     icon: <Apple className="h-6 w-6" />,
-    filename: "spk-desktop_0.1.0_x64.dmg",
+    filename: "SPK Desktop_0.1.0_x64.dmg",
     description: "macOS 10.15+ (Intel)",
   },
   "macos-arm": {
     platform: "macos-arm",
     label: "macOS (Apple Silicon)",
     icon: <Apple className="h-6 w-6" />,
-    filename: "spk-desktop_0.1.0_aarch64.dmg",
+    filename: "SPK Desktop_0.1.0_aarch64.dmg",
     description: "macOS 11+ (M1/M2/M3)",
   },
   linux: {
@@ -54,7 +54,7 @@ const DOWNLOADS: Record<Platform, DownloadInfo> = {
 
 const GITHUB_REPO = "Dhenz14/spknetworkpoa";
 const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_REPO}/releases`;
-const GITHUB_LATEST_DOWNLOAD = `https://github.com/${GITHUB_REPO}/releases/latest/download`;
+const GITHUB_LATEST_DOWNLOAD = `https://github.com/${GITHUB_REPO}/releases/download/latest`;
 
 function detectPlatform(): Platform {
   if (typeof navigator === "undefined") return "unknown";
