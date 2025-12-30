@@ -51,8 +51,9 @@
     ],
     "extraResources": [
       {
-        "from": "node_modules/go-ipfs/go-ipfs/ipfs${ext}",
-        "to": "ipfs${ext}"
+        "from": "node_modules/go-ipfs/go-ipfs",
+        "to": "go-ipfs",
+        "filter": ["**/*"]
       }
     ],
     "mac": {
