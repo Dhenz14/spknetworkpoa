@@ -1263,6 +1263,7 @@ export async function registerRoutes(
         max: Math.max(...latencies, 0),
       },
       uptime: uptime.toFixed(1),
+      hourlyActivity: hourlyActivity.reverse().map((active, i) => ({ hour: i, active: active ? 1 : 0 })),
       earnings: validator.payoutRate * totalChallenges * 0.0001, // Simulated earnings
     });
   });
@@ -1419,11 +1420,29 @@ export async function registerRoutes(
     const completed = enrichedChallenges.filter(c => c.result);
     const failed = completed.filter(c => c.result === "fail" || c.result === "timeout");
     
+    // Calculate today's stats
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const todayChallenges = enrichedChallenges.filter(c => 
+      now - new Date(c.createdAt).getTime() < dayMs
+    );
+    const completedToday = todayChallenges.filter(c => c.result === "success").length;
+    const failedToday = todayChallenges.filter(c => c.result === "fail" || c.result === "timeout").length;
+    
     res.json({
       pending,
       completed,
       failed,
       history: enrichedChallenges,
+      pendingCount: pending.length,
+      completedToday,
+      failedToday,
+      summary: {
+        pendingCount: pending.length,
+        completedToday,
+        failedToday,
+        total: enrichedChallenges.length,
+      },
     });
   });
 

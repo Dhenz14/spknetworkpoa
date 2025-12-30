@@ -74,6 +74,46 @@ New pages for storage operators to track earnings and optimize performance:
 
 - **Key Files**: `client/src/pages/earnings.tsx`, `client/src/pages/marketplace.tsx`, `client/src/pages/analytics.tsx`, `client/src/hooks/use-alerts.ts`
 
+### Validator Operations Center (December 2025)
+New pages for validators who police the network and audit storage nodes:
+
+- **Validator Dashboard** (`/validator-dashboard`):
+  - Challenge stats (today/week/month totals)
+  - Success/fail/timeout ratio with pie chart
+  - Latency metrics (avg, P95, min/max)
+  - 24-hour uptime tracker with activity chart
+  - Validation earnings overview
+
+- **Node Monitoring** (`/node-monitoring`):
+  - Live node health map with color-coded grid
+  - At-risk nodes close to ban threshold
+  - Recently banned nodes list
+  - Probation list for nodes on warning
+  - Node detail drilldown with challenge history
+
+- **Challenge Queue** (`/challenge-queue`):
+  - Pending/active challenges with countdown
+  - Challenge history with full details
+  - Retry button for failed/timeout challenges
+  - Live activity feed with real-time updates
+  - Challenge details modal with expected vs received hash
+
+- **Fraud Detection** (`/fraud-detection`):
+  - Suspicious patterns (high variance, too-fast responses)
+  - Outsourcing detection via latency analysis
+  - Collusion alerts for synchronized failures
+  - Hash mismatch log with full challenge data
+  - Investigation actions (Flag, Watchlist, Ban)
+
+- **API Endpoints**:
+  - `/api/validator/dashboard/:username` - Validator stats and metrics
+  - `/api/validator/nodes` - Node monitoring data with risk levels
+  - `/api/validator/nodes/:nodeId` - Individual node details
+  - `/api/validator/challenges` - Challenge queue with pending/completed/failed
+  - `/api/validator/fraud` - Fraud detection patterns and alerts
+
+- **Key Files**: `client/src/pages/validator-dashboard.tsx`, `client/src/pages/node-monitoring.tsx`, `client/src/pages/challenge-queue.tsx`, `client/src/pages/fraud-detection.tsx`
+
 ### PoA Engine Optimizations (December 2025)
 - **Parallel Block Fetching**: Uses Promise.all for 3-5x faster proof verification
 - **2-Second Challenge Timeout**: Reduced from 30s to prevent cheating/outsourcing

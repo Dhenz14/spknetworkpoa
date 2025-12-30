@@ -48,12 +48,9 @@ interface ChallengeStats {
 async function fetchChallenges(): Promise<ChallengeStats> {
   const res = await fetch("/api/validator/challenges");
   if (!res.ok) {
-    return generateMockChallenges();
+    throw new Error(`Failed to fetch challenges: ${res.status} ${res.statusText}`);
   }
   const data = await res.json();
-  if (!data || !data.challenges || data.challenges.length === 0) {
-    return generateMockChallenges();
-  }
   return {
     pendingCount: data.pendingCount || 0,
     completedToday: data.completedToday || 0,
@@ -82,46 +79,6 @@ function mapResult(result: string): ChallengeResult {
   if (result === "fail" || result === "failed") return "fail";
   if (result === "timeout") return "timeout";
   return "pending";
-}
-
-function generateMockChallenges(): ChallengeStats {
-  const results: ChallengeResult[] = ["pass", "fail", "timeout", "pending"];
-  const nodes = ["alice_node", "bob_storage", "charlie_ipfs", "diana_vault", "evan_host"];
-  const files = ["video_001.mp4", "document.pdf", "image_hd.png", "audio_track.wav", "archive.zip"];
-  
-  const challenges: Challenge[] = Array.from({ length: 50 }, (_, i) => {
-    const result = results[Math.floor(Math.random() * results.length)];
-    const latency = result === "timeout" ? 5000 + Math.floor(Math.random() * 2000) : 50 + Math.floor(Math.random() * 400);
-    const now = Date.now();
-    const timestamp = new Date(now - Math.floor(Math.random() * 24 * 60 * 60 * 1000)).toISOString();
-    
-    return {
-      id: `challenge_${i + 1}`,
-      nodeUsername: nodes[Math.floor(Math.random() * nodes.length)],
-      nodeId: `node_${Math.floor(Math.random() * 100)}`,
-      fileName: files[Math.floor(Math.random() * files.length)],
-      fileCid: `Qm${Array.from({ length: 44 }, () => "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random() * 62)]).join("")}`,
-      latencyMs: latency,
-      result,
-      timestamp,
-      salt: `salt_${Math.random().toString(36).substring(2, 10)}`,
-      byteRangeStart: Math.floor(Math.random() * 1000000),
-      byteRangeEnd: Math.floor(Math.random() * 1000000) + 1000000,
-      expectedHash: result === "fail" ? `0x${Math.random().toString(16).substring(2, 18)}` : undefined,
-      receivedHash: result === "fail" ? `0x${Math.random().toString(16).substring(2, 18)}` : undefined,
-      responseTimeBreakdown: {
-        networkMs: Math.floor(latency * 0.3),
-        computeMs: Math.floor(latency * 0.5),
-        totalMs: latency,
-      },
-    };
-  });
-
-  const pendingCount = challenges.filter(c => c.result === "pending").length;
-  const completedToday = challenges.filter(c => c.result === "pass").length;
-  const failedToday = challenges.filter(c => c.result === "fail" || c.result === "timeout").length;
-
-  return { pendingCount, completedToday, failedToday, challenges };
 }
 
 function formatTimestamp(dateStr: string): string {
@@ -174,10 +131,11 @@ export default function ChallengeQueue() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const feedRef = useRef<HTMLDivElement>(null);
 
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["validator", "challenges"],
     queryFn: fetchChallenges,
     refetchInterval: 5000,
+    retry: 2,
   });
 
   useEffect(() => {
@@ -223,6 +181,42 @@ export default function ChallengeQueue() {
           <h1 className="text-3xl font-display font-bold">Challenge Queue</h1>
           <p className="text-muted-foreground mt-1">Loading challenges...</p>
         </div>
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" />
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-8 space-y-8 max-w-7xl mx-auto" data-testid="page-challenge-queue-error">
+        <div>
+          <h1 className="text-3xl font-display font-bold">Challenge Queue</h1>
+          <p className="text-muted-foreground mt-1">View and manage PoA validation challenges</p>
+        </div>
+        <Card className="border-red-500/30 bg-red-500/5">
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <XCircle className="w-12 h-12 text-red-500 mb-4" />
+              <h3 className="text-lg font-semibold text-red-500 mb-2" data-testid="text-error-title">
+                Failed to Load Challenges
+              </h3>
+              <p className="text-muted-foreground mb-4 max-w-md" data-testid="text-error-message">
+                {error instanceof Error ? error.message : "An unexpected error occurred while fetching challenge data. Please try again."}
+              </p>
+              <Button
+                onClick={() => refetch()}
+                variant="outline"
+                className="gap-2"
+                data-testid="btn-retry-load"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -340,8 +334,20 @@ export default function ChallengeQueue() {
                       <TableBody>
                         {filteredChallenges.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                              No challenges in this category
+                            <TableCell colSpan={8} className="text-center py-12" data-testid="empty-state-challenges">
+                              <div className="flex flex-col items-center justify-center">
+                                <Clock className="w-10 h-10 text-muted-foreground/50 mb-3" />
+                                <p className="text-muted-foreground font-medium mb-1">
+                                  {activeTab === "active" && "No pending challenges"}
+                                  {activeTab === "completed" && "No completed challenges today"}
+                                  {activeTab === "failed" && "No failed challenges today"}
+                                </p>
+                                <p className="text-sm text-muted-foreground/70">
+                                  {activeTab === "active" && "New validation challenges will appear here when nodes are challenged."}
+                                  {activeTab === "completed" && "Successfully completed challenges will be listed here."}
+                                  {activeTab === "failed" && "Failed or timed out challenges will be shown here."}
+                                </p>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ) : (
@@ -449,44 +455,54 @@ export default function ChallengeQueue() {
             </CardHeader>
             <CardContent className="flex-1 overflow-hidden p-0">
               <ScrollArea className="h-full px-4" ref={feedRef}>
-                <AnimatePresence mode="popLayout">
-                  {latestChallenges.map((challenge, index) => (
-                    <motion.div
-                      key={challenge.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
-                      transition={{ duration: 0.2, delay: index * 0.02 }}
-                      className={cn(
-                        "p-3 mb-2 rounded-lg border cursor-pointer transition-colors hover:bg-muted/50",
-                        challenge.result === "pass" && "border-green-500/30 bg-green-500/5",
-                        challenge.result === "fail" && "border-red-500/30 bg-red-500/5",
-                        challenge.result === "timeout" && "border-yellow-500/30 bg-yellow-500/5",
-                        challenge.result === "pending" && "border-gray-500/30 bg-gray-500/5"
-                      )}
-                      onClick={() => setSelectedChallenge(challenge)}
-                      data-testid={`feed-item-${challenge.id}`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-sm truncate max-w-[120px]">
-                          {challenge.nodeUsername}
-                        </span>
-                        {getResultBadge(challenge.result)}
-                      </div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {challenge.fileName}
-                      </div>
-                      <div className="flex justify-between items-center mt-2 text-xs">
-                        <span className="font-mono text-muted-foreground">
-                          {challenge.latencyMs}ms
-                        </span>
-                        <span className="text-muted-foreground">
-                          {formatTimestamp(challenge.timestamp)}
-                        </span>
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
+                {latestChallenges.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full py-12 text-center" data-testid="empty-state-live-feed">
+                    <Activity className="w-8 h-8 text-muted-foreground/50 mb-3" />
+                    <p className="text-muted-foreground text-sm font-medium mb-1">No activity yet</p>
+                    <p className="text-xs text-muted-foreground/70 max-w-[200px]">
+                      Challenge events will appear here in real-time as they occur.
+                    </p>
+                  </div>
+                ) : (
+                  <AnimatePresence mode="popLayout">
+                    {latestChallenges.map((challenge, index) => (
+                      <motion.div
+                        key={challenge.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 20 }}
+                        transition={{ duration: 0.2, delay: index * 0.02 }}
+                        className={cn(
+                          "p-3 mb-2 rounded-lg border cursor-pointer transition-colors hover:bg-muted/50",
+                          challenge.result === "pass" && "border-green-500/30 bg-green-500/5",
+                          challenge.result === "fail" && "border-red-500/30 bg-red-500/5",
+                          challenge.result === "timeout" && "border-yellow-500/30 bg-yellow-500/5",
+                          challenge.result === "pending" && "border-gray-500/30 bg-gray-500/5"
+                        )}
+                        onClick={() => setSelectedChallenge(challenge)}
+                        data-testid={`feed-item-${challenge.id}`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium text-sm truncate max-w-[120px]">
+                            {challenge.nodeUsername}
+                          </span>
+                          {getResultBadge(challenge.result)}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {challenge.fileName}
+                        </div>
+                        <div className="flex justify-between items-center mt-2 text-xs">
+                          <span className="font-mono text-muted-foreground">
+                            {challenge.latencyMs}ms
+                          </span>
+                          <span className="text-muted-foreground">
+                            {formatTimestamp(challenge.timestamp)}
+                          </span>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                )}
               </ScrollArea>
             </CardContent>
           </Card>

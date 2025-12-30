@@ -102,7 +102,7 @@ export default function FraudDetection() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [banningNode, setBanningNode] = useState<{ id: string; username: string } | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["validator", "fraud"],
     queryFn: fetchFraudData,
     refetchInterval: 30000,
@@ -143,15 +143,49 @@ export default function FraudDetection() {
     setBanningNode(null);
   };
 
-  if (isLoading || !data) {
+  if (isLoading) {
     return (
       <div className="p-8 space-y-8 max-w-7xl mx-auto" data-testid="page-fraud-detection">
-        <div>
+        <div className="flex items-center gap-3">
+          <ShieldAlert className="w-8 h-8 text-red-500" />
           <h1 className="text-3xl font-display font-bold">Fraud Detection</h1>
-          <p className="text-muted-foreground mt-1">Loading fraud detection data...</p>
+        </div>
+        <div className="flex items-center justify-center py-12" data-testid="loading-state">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" data-testid="loading-spinner" />
+            <p className="text-muted-foreground" data-testid="loading-text">Loading fraud detection data...</p>
+          </div>
         </div>
       </div>
     );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-8 space-y-8 max-w-7xl mx-auto" data-testid="page-fraud-detection">
+        <div className="flex items-center gap-3">
+          <ShieldAlert className="w-8 h-8 text-red-500" />
+          <h1 className="text-3xl font-display font-bold">Fraud Detection</h1>
+        </div>
+        <Card className="border-red-500/50 bg-red-500/5" data-testid="error-state">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-6 h-6 text-red-500" />
+              <div>
+                <p className="font-medium text-red-500" data-testid="error-title">Error Loading Data</p>
+                <p className="text-sm text-muted-foreground" data-testid="error-message">
+                  {error instanceof Error ? error.message : "Failed to load fraud detection data. Please try again."}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return null;
   }
 
   const highSeverityCount = data.suspiciousPatterns.filter(p => p.severity === "high").length;
@@ -450,7 +484,7 @@ export default function FraudDetection() {
                                   <Ban className="w-4 h-4" />
                                 </Button>
                               </AlertDialogTrigger>
-                              <AlertDialogContent>
+                              <AlertDialogContent data-testid={`dialog-ban-mismatch-${mismatch.id}`}>
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Ban Node</AlertDialogTitle>
                                   <AlertDialogDescription>
@@ -458,10 +492,11 @@ export default function FraudDetection() {
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogCancel data-testid={`button-ban-mismatch-cancel-${mismatch.id}`}>Cancel</AlertDialogCancel>
                                   <AlertDialogAction
                                     onClick={() => handleBanNode(mismatch.nodeId, mismatch.nodeUsername)}
                                     className="bg-red-500 hover:bg-red-600"
+                                    data-testid={`button-ban-mismatch-confirm-${mismatch.id}`}
                                   >
                                     Ban Node
                                   </AlertDialogAction>

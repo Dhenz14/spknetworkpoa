@@ -7,6 +7,11 @@ import { useQuery } from "@tanstack/react-query";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip } from "recharts";
 import { cn } from "@/lib/utils";
 
+interface HourlyActivityItem {
+  hour: number;
+  active: number;
+}
+
 interface ValidatorDashboardData {
   validator: {
     id: string;
@@ -36,6 +41,7 @@ interface ValidatorDashboardData {
     max: number;
   };
   uptime: string;
+  hourlyActivity: HourlyActivityItem[];
   earnings: number;
 }
 
@@ -55,6 +61,7 @@ async function fetchValidatorDashboard(username: string): Promise<ValidatorDashb
       results: { success: 0, fail: 0, timeout: 0, successRate: "0.0", cheatersCaught: 0 },
       latency: { avg: 0, p95: 0, min: 0, max: 0 },
       uptime: "0.0",
+      hourlyActivity: Array.from({ length: 24 }, (_, i) => ({ hour: i, active: 0 })),
       earnings: 0,
     };
   }
@@ -113,15 +120,13 @@ export default function ValidatorDashboard() {
     { name: "Timeout", value: data.results.timeout, color: "#f59e0b" },
   ].filter(d => d.value > 0);
 
-  const hourlyActivity = Array.from({ length: 24 }, (_, i) => ({
-    hour: i,
-    active: Math.random() > 0.1 ? 1 : 0,
-  }));
+  const hourlyActivity = data.hourlyActivity;
 
-  const yesterdayEstimate = Math.floor(data.stats.today * (0.8 + Math.random() * 0.4));
-  const todayTrend = data.stats.today - yesterdayEstimate;
-  const todayTrendPercent = yesterdayEstimate > 0 
-    ? Math.round((todayTrend / yesterdayEstimate) * 100) 
+  const activeHours = hourlyActivity.filter(h => h.active > 0).length;
+  const weeklyAvgPerDay = data.stats.week > 0 ? Math.floor(data.stats.week / 7) : 0;
+  const todayTrend = weeklyAvgPerDay > 0 ? data.stats.today - weeklyAvgPerDay : 0;
+  const todayTrendPercent = weeklyAvgPerDay > 0 
+    ? Math.round((todayTrend / weeklyAvgPerDay) * 100) 
     : 0;
 
   return (
@@ -138,7 +143,7 @@ export default function ValidatorDashboard() {
           <p className="text-muted-foreground mt-1">Network policing and challenge monitoring</p>
         </div>
         <div className="flex gap-2">
-          <span className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-full font-mono flex items-center gap-2 border border-primary/20">
+          <span className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-full font-mono flex items-center gap-2 border border-primary/20" data-testid="status-live-updates">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
             Live Updates
           </span>
@@ -238,7 +243,7 @@ export default function ValidatorDashboard() {
           <CardContent className="space-y-6">
             <div className="flex items-center gap-6">
               {/* Pie Chart */}
-              <div className="w-32 h-32">
+              <div className="w-32 h-32" data-testid="chart-results-pie">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -418,7 +423,7 @@ export default function ValidatorDashboard() {
             </div>
 
             {/* 24-hour Activity Bar Chart */}
-            <div>
+            <div data-testid="chart-hourly-activity">
               <p className="text-sm text-muted-foreground mb-2">24-Hour Activity</p>
               <div className="h-16">
                 <ResponsiveContainer width="100%" height="100%">
@@ -482,7 +487,7 @@ export default function ValidatorDashboard() {
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 bg-background/50 rounded-lg border border-border/30 text-center">
                 <p className="text-xs text-muted-foreground">Per Challenge</p>
-                <p className="text-lg font-bold text-primary">
+                <p className="text-lg font-bold text-primary" data-testid="text-earnings-per-challenge">
                   {(data.stats.total > 0 ? data.earnings / data.stats.total : 0).toFixed(6)} HBD
                 </p>
               </div>
@@ -495,10 +500,10 @@ export default function ValidatorDashboard() {
             </div>
 
             {/* Earnings Trend */}
-            <div className="flex items-center justify-center gap-2 p-3 bg-background/50 rounded-lg border border-border/30">
+            <div className="flex items-center justify-center gap-2 p-3 bg-background/50 rounded-lg border border-border/30" data-testid="container-earnings-rate">
               <TrendingUp className="w-4 h-4 text-green-500" />
               <span className="text-sm text-muted-foreground">
-                Earning rate: <span className="text-green-500 font-medium">{((data.earnings / Math.max(1, data.stats.week)) * 7).toFixed(4)} HBD/week</span>
+                Earning rate: <span className="text-green-500 font-medium" data-testid="text-earnings-rate">{((data.earnings / Math.max(1, data.stats.week)) * 7).toFixed(4)} HBD/week</span>
               </span>
             </div>
           </CardContent>
