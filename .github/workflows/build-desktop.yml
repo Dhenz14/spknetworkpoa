@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-20.04, windows-latest, macos-latest]
 
     runs-on: ${{ matrix.os }}
 
@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '18'
 
       - name: Install dependencies
         working-directory: desktop-agent
@@ -52,14 +52,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           USE_HARD_LINKS: false
-          DEBUG: electron-builder
+          CSC_IDENTITY_AUTO_DISCOVERY: false
         run: |
           if [ "${{ runner.os }}" == "Windows" ]; then
             npx electron-builder --win --x64 --dir
           elif [ "${{ runner.os }}" == "macOS" ]; then
             npx electron-builder --mac --x64 --dir
           else
-            npx electron-builder --linux --x64 --dir
+            npx electron-builder --linux --x64
           fi
 
       - name: List build output
@@ -75,7 +75,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: spk-desktop-linux
-          path: desktop-agent/build/linux-unpacked/
+          path: desktop-agent/build/*.AppImage
           if-no-files-found: warn
 
       - name: Upload macOS artifact
@@ -122,9 +122,8 @@ jobs:
           if [ -d "artifacts/spk-desktop-mac/mac" ]; then
             cd artifacts/spk-desktop-mac && tar -czvf ../../release-files/spk-desktop-mac.tar.gz mac/ && cd ../..
           fi
-          if [ -d "artifacts/spk-desktop-linux/linux-unpacked" ]; then
-            cd artifacts/spk-desktop-linux && tar -czvf ../../release-files/spk-desktop-linux.tar.gz linux-unpacked/ && cd ../..
-          fi
+          # Copy AppImage files directly
+          find artifacts -name "*.AppImage" -exec cp {} release-files/ \;
           echo "Release files:"
           ls -la release-files/
 
@@ -148,7 +147,7 @@ jobs:
             Download for your platform:
             - **Windows**: `spk-desktop-win.zip` - Extract and run
             - **macOS**: `spk-desktop-mac.tar.gz` - Extract and run
-            - **Linux**: `spk-desktop-linux.tar.gz` - Extract and run
+            - **Linux**: `.AppImage` - Make executable with `chmod +x` and run
             
             Built from commit: ${{ github.sha }}
           files: release-files/*
