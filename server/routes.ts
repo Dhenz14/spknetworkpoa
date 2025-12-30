@@ -884,8 +884,8 @@ export async function registerRoutes(
   // Earnings & Analytics API (For Storage Operators)
   // ============================================================
 
-  // Get earnings data for a node
-  app.get("/api/earnings/:username", async (req, res) => {
+  // Get dashboard earnings data for a node (detailed stats)
+  app.get("/api/earnings/dashboard/:username", async (req, res) => {
     const { username } = req.params;
     const nodes = await storage.getAllStorageNodes();
     

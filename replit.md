@@ -42,6 +42,38 @@ SPK Network 2.0 (HivePoA) is a comprehensive decentralized storage validation pr
 - **Phase 3**: Multi-tier blocklists, community tagging, content fingerprinting
 - **Phase 4**: E2E encryption, auto-pinning, beneficiary rewards
 
+### Storage Operator Dashboard (December 2025)
+New pages for storage operators to track earnings and optimize performance:
+
+- **Earnings Dashboard** (`/earnings`):
+  - Real-time HBD earnings (today/week/month projections)
+  - Streak tracker with tier badges (Bronze/Silver/Gold/Diamond)
+  - Ban risk warnings (0/3, 1/3, 2/3 consecutive failures)
+  - Live challenge activity feed with pass/fail results
+  - Per-file earnings breakdown with ROI scoring
+  - Earnings history chart
+
+- **Content Marketplace** (`/marketplace`):
+  - Rarity heatmap showing content replication levels
+  - Top ROI recommendations for high-value pinning
+  - File table with sortable columns (rarity, ROI, size)
+  - "Rare content" badges for files with <3 replicas
+
+- **Performance Analytics** (`/analytics`):
+  - Proofs/hour and bandwidth metrics
+  - 24-hour success rate trend chart
+  - Latency distribution with warning indicators
+  - Optimization suggestions based on performance
+  - Network health overview
+
+- **Alert System**:
+  - Streak milestone notifications (10/50/100 consecutive)
+  - Ban warning toasts when failures accumulate
+  - Earnings milestone celebrations
+  - localStorage persistence to avoid repeat alerts
+
+- **Key Files**: `client/src/pages/earnings.tsx`, `client/src/pages/marketplace.tsx`, `client/src/pages/analytics.tsx`, `client/src/hooks/use-alerts.ts`
+
 ### PoA Engine Optimizations (December 2025)
 - **Parallel Block Fetching**: Uses Promise.all for 3-5x faster proof verification
 - **2-Second Challenge Timeout**: Reduced from 30s to prevent cheating/outsourcing

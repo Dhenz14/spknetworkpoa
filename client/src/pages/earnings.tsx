@@ -47,7 +47,7 @@ interface FileEarning {
 }
 
 async function fetchEarnings(username: string): Promise<EarningsData> {
-  const res = await fetch(`/api/earnings/${username}`);
+  const res = await fetch(`/api/earnings/dashboard/${username}`);
   if (!res.ok) {
     return {
       todayEarnings: 0,

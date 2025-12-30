@@ -63,9 +63,9 @@ export function useAlerts(username: string = "demo_user", enabled: boolean = tru
   const alertStateRef = useRef<AlertState>(getAlertState());
 
   const { data: earningsData } = useQuery<EarningsData>({
-    queryKey: ["earnings", username],
+    queryKey: ["earnings-dashboard", username],
     queryFn: async () => {
-      const res = await fetch(`/api/earnings/${username}`);
+      const res = await fetch(`/api/earnings/dashboard/${username}`);
       if (!res.ok) throw new Error("Failed to fetch earnings");
       return res.json();
     },
