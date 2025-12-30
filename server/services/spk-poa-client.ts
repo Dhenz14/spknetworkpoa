@@ -4,7 +4,11 @@ import { createRandomHash } from "./poa-crypto";
 export interface SPKNodeConfig {
   url: string;
   username: string;
+  timeoutMs?: number; // Default 2000ms (was 30000ms)
 }
+
+// SPK Network uses 500ms timeout - we use 2000ms for network variance
+const DEFAULT_CHALLENGE_TIMEOUT_MS = 2000;
 
 export interface ValidationRequest {
   type: "RequestProof";
@@ -129,6 +133,7 @@ export class SPKPoAClient {
     }
 
     const validationHash = salt || createRandomHash();
+    const timeoutMs = this.config.timeoutMs || DEFAULT_CHALLENGE_TIMEOUT_MS;
     
     const request: ValidationRequest = {
       type: "RequestProof",
@@ -141,17 +146,18 @@ export class SPKPoAClient {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pendingValidations.delete(validationHash);
+        console.log(`[SPK PoA] Challenge timeout after ${timeoutMs}ms for CID: ${cid}`);
         resolve({
           status: "timeout",
           name: this.config.username,
-          elapsed: 30000,
+          elapsed: timeoutMs,
         });
-      }, 30000);
+      }, timeoutMs);
 
       this.pendingValidations.set(validationHash, { resolve, reject, timeout });
       
       this.ws!.send(JSON.stringify(request));
-      console.log(`[SPK PoA] Sent validation request for CID: ${cid} with Hash: ${validationHash.slice(0, 16)}...`);
+      console.log(`[SPK PoA] Sent validation request for CID: ${cid} (timeout: ${timeoutMs}ms)`);
     });
   }
 
@@ -190,9 +196,20 @@ export class MockSPKPoAClient {
   }
 
   async validate(cid: string, salt?: string): Promise<ValidationResponse> {
-    const elapsed = Math.floor(Math.random() * 2000) + 100;
+    const timeoutMs = this.config.timeoutMs || DEFAULT_CHALLENGE_TIMEOUT_MS;
+    // Simulate realistic latency (most responses under timeout)
+    const elapsed = Math.floor(Math.random() * Math.min(1500, timeoutMs - 200)) + 100;
     
-    await new Promise(r => setTimeout(r, elapsed));
+    await new Promise(r => setTimeout(r, Math.min(elapsed, 500))); // Cap simulation delay
+    
+    // Occasionally simulate timeout
+    if (Math.random() < 0.05) { // 5% timeout rate
+      return {
+        status: "timeout",
+        name: this.config.username,
+        elapsed: timeoutMs,
+      };
+    }
     
     const success = Math.random() < this.successRate;
     

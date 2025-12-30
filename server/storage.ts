@@ -85,7 +85,8 @@ export interface IStorage {
   getStorageNodeByPeerId(peerId: string): Promise<StorageNode | undefined>;
   getAllStorageNodes(): Promise<StorageNode[]>;
   createStorageNode(node: InsertStorageNode): Promise<StorageNode>;
-  updateStorageNodeReputation(id: string, reputation: number, status: string): Promise<void>;
+  updateStorageNodeReputation(id: string, reputation: number, status: string, consecutiveFails?: number): Promise<void>;
+  updateNodeEarnings(id: string, hbdAmount: number): Promise<void>;
   
   // Files
   getFile(id: string): Promise<File | undefined>;
@@ -94,6 +95,7 @@ export interface IStorage {
   createFile(file: InsertFile): Promise<File>;
   updateFileStatus(id: string, status: string, replicationCount: number, confidence: number): Promise<void>;
   updateFileCid(id: string, newCid: string): Promise<void>;
+  updateFileEarnings(id: string, hbdAmount: number): Promise<void>;
   deleteFile(id: string): Promise<boolean>;
   
   // Validators
@@ -247,9 +249,21 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async updateStorageNodeReputation(id: string, reputation: number, status: string): Promise<void> {
+  async updateStorageNodeReputation(id: string, reputation: number, status: string, consecutiveFails?: number): Promise<void> {
+    const updateData: any = { reputation, status, lastSeen: new Date() };
+    if (consecutiveFails !== undefined) {
+      updateData.consecutiveFails = consecutiveFails;
+    }
     await db.update(storageNodes)
-      .set({ reputation, status, lastSeen: new Date() })
+      .set(updateData)
+      .where(eq(storageNodes.id, id));
+  }
+
+  async updateNodeEarnings(id: string, hbdAmount: number): Promise<void> {
+    await db.update(storageNodes)
+      .set({ 
+        totalEarnedHbd: sql`COALESCE(${storageNodes.totalEarnedHbd}, 0) + ${hbdAmount}` 
+      })
       .where(eq(storageNodes.id, id));
   }
 
@@ -307,6 +321,14 @@ export class DatabaseStorage implements IStorage {
   async updateFileCid(id: string, newCid: string): Promise<void> {
     await db.update(files)
       .set({ cid: newCid })
+      .where(eq(files.id, id));
+  }
+
+  async updateFileEarnings(id: string, hbdAmount: number): Promise<void> {
+    await db.update(files)
+      .set({ 
+        earnedHbd: sql`COALESCE(${files.earnedHbd}, 0) + ${hbdAmount}` 
+      })
       .where(eq(files.id, id));
   }
 

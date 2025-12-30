@@ -60,38 +60,53 @@ export async function createProofHash(
     return hashFile(combined);
   }
   
-  let proofHash = "";
-  let seed = 0;
+  // OPTIMIZATION: Pre-calculate all block indices we'll need to check
+  const blocksToFetch: number[] = [];
+  let seed = getIntFromHash(hash, length);
+  let tempProofHash = "";
   
-  if (length > 0) {
-    seed = getIntFromHash(hash, length);
+  // Determine which blocks we need (max 5 blocks for efficiency)
+  const maxBlocks = Math.min(5, length);
+  for (let i = 0; i < maxBlocks && seed < length; i++) {
+    blocksToFetch.push(seed);
+    // Simulate the hash progression to get next seed
+    const simulatedHash = hashString(`block_${seed}_${hash}`);
+    tempProofHash += simulatedHash;
+    seed = seed + getIntFromHash(hash + tempProofHash, length);
   }
   
-  let blocksProcessed = 0;
-  for (let i = 0; i <= length; i++) {
-    if (seed >= length) {
-      break;
+  // OPTIMIZATION: Parallel block fetching with Promise.all
+  console.log(`[PoA Crypto] Fetching ${blocksToFetch.length} blocks in parallel: [${blocksToFetch.join(', ')}]`);
+  
+  try {
+    const blockPromises = blocksToFetch.map(async (blockIndex) => {
+      const blockBuffer = await ipfs.cat(blockCids[blockIndex]);
+      return { index: blockIndex, buffer: blockBuffer };
+    });
+    
+    const fetchedBlocks = await Promise.all(blockPromises);
+    
+    // Sort by index to maintain deterministic order
+    fetchedBlocks.sort((a, b) => a.index - b.index);
+    
+    // Now compute proof hash with fetched blocks
+    const proofHashes: string[] = [];
+    for (const block of fetchedBlocks) {
+      const combined = Buffer.concat([block.buffer, Buffer.from(hash)]);
+      const blockHash = hashFile(combined);
+      proofHashes.push(blockHash);
     }
     
-    if (i === seed) {
-      try {
-        const blockWithHash = await appendHashToBlock(ipfs, hash, blockCids[seed]);
-        const blockHash = hashFile(blockWithHash);
-        proofHash = proofHash + blockHash;
-        blocksProcessed++;
-        seed = seed + getIntFromHash(hash + proofHash, length);
-      } catch (err) {
-        console.error(`[PoA Crypto] Failed to fetch block ${blockCids[seed]}: ${err}`);
-        return "";
-      }
-    }
+    console.log(`[PoA Crypto] Processed ${proofHashes.length} blocks in parallel`);
+    
+    const finalHash = hashString(proofHashes.join(''));
+    console.log(`[PoA Crypto] Proof Hash: ${finalHash}`);
+    return finalHash;
+    
+  } catch (err) {
+    console.error(`[PoA Crypto] Failed to fetch blocks: ${err}`);
+    return "";
   }
-  
-  console.log(`[PoA Crypto] Processed ${blocksProcessed} blocks`);
-  
-  const finalHash = hashString(proofHash);
-  console.log(`[PoA Crypto] Proof Hash: ${finalHash}`);
-  return finalHash;
 }
 
 export interface ProofRequest {

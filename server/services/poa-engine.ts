@@ -222,25 +222,44 @@ export class PoAEngine {
     const node = await storage.getStorageNode(nodeId);
     if (!node) return;
 
+    const file = await storage.getFile(fileId);
+    const cid = file?.cid || "";
+
     await storage.updateChallengeResult(challengeId, response, result, latencyMs);
     await storage.updateAssignmentProof(fileId, nodeId, result === "success");
 
-    const newReputation = result === "success"
-      ? Math.min(100, node.reputation + 1)
-      : Math.max(0, node.reputation - 5);
+    // OPTIMIZATION: Track consecutive fails - 3 in a row = instant ban
+    const currentConsecutiveFails = (node as any).consecutiveFails || 0;
+    let newConsecutiveFails = result === "success" ? 0 : currentConsecutiveFails + 1;
+    
+    // Calculate reputation change
+    let newReputation: number;
+    let newStatus: string;
+    
+    if (result === "success") {
+      newReputation = Math.min(100, node.reputation + 1);
+    } else {
+      // Exponential penalty for consecutive fails
+      const penalty = Math.min(20, 5 * Math.pow(1.5, newConsecutiveFails - 1));
+      newReputation = Math.max(0, node.reputation - Math.floor(penalty));
+    }
 
-    const newStatus = newReputation < 10 
-      ? "banned" 
-      : newReputation < 30 
-      ? "probation" 
-      : "active";
+    // OPTIMIZATION: 3 consecutive fails = instant ban (per SPK Network spec)
+    if (newConsecutiveFails >= 3) {
+      newStatus = "banned";
+      newReputation = 0;
+      console.log(`[PoA] INSTANT BAN: ${node.hiveUsername} - 3 consecutive failures`);
+    } else if (newReputation < 10) {
+      newStatus = "banned";
+    } else if (newReputation < 30) {
+      newStatus = "probation";
+    } else {
+      newStatus = "active";
+    }
 
-    await storage.updateStorageNodeReputation(node.id, newReputation, newStatus);
+    await storage.updateStorageNodeReputation(node.id, newReputation, newStatus, newConsecutiveFails);
 
-    console.log(`[PoA] Challenge ${result}: ${node.hiveUsername} (Rep: ${node.reputation} -> ${newReputation})`);
-
-    const file = await storage.getFile(fileId);
-    const cid = file?.cid || "";
+    console.log(`[PoA] Challenge ${result}: ${node.hiveUsername} (Rep: ${node.reputation} -> ${newReputation}, Consecutive Fails: ${newConsecutiveFails})`);
 
     if (this.config.broadcastToHive) {
       try {
@@ -249,7 +268,7 @@ export class PoAEngine {
             node.hiveUsername,
             node.reputation,
             newReputation,
-            "Failed PoA challenge"
+            newConsecutiveFails >= 3 ? "BANNED: 3 consecutive PoA failures" : "Failed PoA challenge"
           );
         } else {
           await this.hiveClient.broadcastPoAResult(
@@ -271,23 +290,43 @@ export class PoAEngine {
         fromUser: this.config.validatorUsername,
         toUser: node.hiveUsername,
         payload: JSON.stringify({
-          reason: "Failed PoA challenge",
+          reason: newConsecutiveFails >= 3 ? "BANNED: 3 consecutive failures" : "Failed PoA challenge",
           oldRep: node.reputation,
           newRep: newReputation,
+          consecutiveFails: newConsecutiveFails,
         }),
         blockNumber: Math.floor(Date.now() / 1000),
       });
     } else {
+      // OPTIMIZATION: Rarity-based reward multiplier
+      // Fewer replicas = higher reward (incentivizes storing rare content)
+      const replicationCount = file?.replicationCount || 1;
+      const baseReward = 0.001; // Base HBD per proof
+      const rarityMultiplier = 1 / Math.max(1, replicationCount);
+      const reward = baseReward * rarityMultiplier;
+      const rewardFormatted = reward.toFixed(4);
+
+      // Update file earnings
+      if (file) {
+        await storage.updateFileEarnings(fileId, reward);
+      }
+
+      // Update node total earnings
+      await storage.updateNodeEarnings(nodeId, reward);
+
       await storage.createHiveTransaction({
         type: "hbd_transfer",
         fromUser: this.config.validatorUsername,
         toUser: node.hiveUsername,
         payload: JSON.stringify({
-          amount: "0.001 HBD",
-          memo: `PoA Reward`,
+          amount: `${rewardFormatted} HBD`,
+          memo: `PoA Reward (${replicationCount} replicas, ${rarityMultiplier.toFixed(2)}x multiplier)`,
+          cid: cid,
         }),
         blockNumber: Math.floor(Date.now() / 1000),
       });
+
+      console.log(`[PoA] Reward: ${rewardFormatted} HBD to ${node.hiveUsername} (rarity: ${rarityMultiplier.toFixed(2)}x)`);
     }
   }
 

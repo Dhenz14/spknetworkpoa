@@ -16,6 +16,8 @@ export const storageNodes = pgTable("storage_nodes", {
   status: text("status").notNull().default("active"), // active, probation, banned
   totalProofs: integer("total_proofs").notNull().default(0),
   failedProofs: integer("failed_proofs").notNull().default(0),
+  consecutiveFails: integer("consecutive_fails").notNull().default(0), // 3 consecutive = instant ban
+  totalEarnedHbd: real("total_earned_hbd").notNull().default(0), // Track earnings
   lastSeen: timestamp("last_seen").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
