@@ -15,7 +15,8 @@ import {
   RefreshCw,
   ExternalLink,
   Copy,
-  Laptop
+  Laptop,
+  Monitor
 } from "lucide-react";
 import { useNodeConfig } from "@/contexts/NodeConfigContext";
 import { formatBytes, testBackendIPFSConnection, type ConnectionMode } from "@/lib/node-config";
@@ -27,9 +28,13 @@ export default function Connect() {
     setMode, 
     updateConfig, 
     testConnection, 
-    ipfsStats, 
+    ipfsStats,
+    heliaStatus,
     isTesting,
-    refreshStats 
+    isInitializing,
+    refreshStats,
+    initializeBrowserNode,
+    stopBrowserNode
   } = useNodeConfig();
 
   const handleModeChange = (mode: ConnectionMode) => {
@@ -46,7 +51,9 @@ export default function Connect() {
     if (result.success) {
       toast({
         title: "Connected!",
-        description: `Successfully connected to IPFS node`,
+        description: config.mode === "browser" 
+          ? "Browser IPFS node is running" 
+          : "Successfully connected to IPFS node",
       });
     } else {
       toast({
@@ -86,6 +93,30 @@ export default function Connect() {
     }
   };
 
+  const handleStartBrowserNode = async () => {
+    const success = await initializeBrowserNode();
+    if (success) {
+      toast({
+        title: "Browser Node Started!",
+        description: "Your in-browser IPFS node is now running",
+      });
+    } else {
+      toast({
+        title: "Failed to Start",
+        description: "Could not initialize browser IPFS node",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleStopBrowserNode = async () => {
+    await stopBrowserNode();
+    toast({
+      title: "Browser Node Stopped",
+      description: "Your in-browser IPFS node has been stopped",
+    });
+  };
+
   return (
     <div className="p-8 space-y-8 max-w-4xl mx-auto">
       <div>
@@ -94,7 +125,7 @@ export default function Connect() {
           Node Connection
         </h1>
         <p className="text-muted-foreground mt-1">
-          Connect to your IPFS node to store content and earn rewards
+          Connect to IPFS to store content and participate in the network
         </p>
       </div>
 
@@ -103,9 +134,16 @@ export default function Connect() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Connection Status</CardTitle>
-              <CardDescription>Your IPFS node connection</CardDescription>
+              <CardDescription>
+                {config.mode === "browser" ? "Browser IPFS Node" : "Your IPFS node connection"}
+              </CardDescription>
             </div>
-            {config.isConnected ? (
+            {isInitializing ? (
+              <Badge variant="secondary" data-testid="status-initializing">
+                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                Starting...
+              </Badge>
+            ) : config.isConnected ? (
               <Badge variant="default" className="bg-green-500 text-white" data-testid="status-connected">
                 <Wifi className="w-3 h-3 mr-1" />
                 Connected
@@ -124,14 +162,27 @@ export default function Connect() {
               <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                 <div>
                   <p className="text-xs text-muted-foreground">Peer ID</p>
-                  <p className="font-mono text-sm truncate max-w-md">{config.peerId}</p>
+                  <p className="font-mono text-sm truncate max-w-md" data-testid="text-peer-id">{config.peerId}</p>
                 </div>
-                <Button variant="ghost" size="icon" onClick={handleCopyPeerId}>
+                <Button variant="ghost" size="icon" onClick={handleCopyPeerId} data-testid="button-copy-peer-id">
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
               
-              {ipfsStats && (
+              {config.mode === "browser" && heliaStatus && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 bg-muted/50 rounded-lg text-center">
+                    <p className="text-2xl font-bold" data-testid="text-repo-size">{formatBytes(heliaStatus.repoSize)}</p>
+                    <p className="text-xs text-muted-foreground">Storage Used</p>
+                  </div>
+                  <div className="p-3 bg-muted/50 rounded-lg text-center">
+                    <p className="text-2xl font-bold" data-testid="text-num-objects">{heliaStatus.numObjects.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">Objects</p>
+                  </div>
+                </div>
+              )}
+
+              {config.mode !== "browser" && ipfsStats && (
                 <div className="grid grid-cols-3 gap-4">
                   <div className="p-3 bg-muted/50 rounded-lg text-center">
                     <p className="text-2xl font-bold">{formatBytes(ipfsStats.repoSize)}</p>
@@ -148,7 +199,19 @@ export default function Connect() {
                 </div>
               )}
               
-              {config.isConnected && config.mode !== "demo" && (
+              {config.mode === "browser" && config.isConnected && (
+                <div className="flex gap-3">
+                  <Button variant="outline" size="sm" onClick={refreshStats} className="flex-1" data-testid="button-refresh-stats">
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh Stats
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={handleStopBrowserNode} data-testid="button-stop-node">
+                    Stop Node
+                  </Button>
+                </div>
+              )}
+              
+              {config.isConnected && config.mode !== "demo" && config.mode !== "browser" && (
                 <Button variant="outline" size="sm" onClick={refreshStats} className="w-full">
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Refresh Stats
@@ -157,7 +220,19 @@ export default function Connect() {
             </div>
           )}
           
-          {!config.isConnected && config.mode !== "demo" && (
+          {!config.isConnected && config.mode === "browser" && !isInitializing && (
+            <div className="text-center py-8">
+              <Monitor className="h-12 w-12 mx-auto mb-3 text-primary opacity-70" />
+              <p className="text-muted-foreground">Browser node not running</p>
+              <p className="text-sm text-muted-foreground mb-4">Click below to start your in-browser IPFS node</p>
+              <Button onClick={handleStartBrowserNode} data-testid="button-start-browser-node">
+                <Loader2 className={`h-4 w-4 mr-2 ${isInitializing ? "animate-spin" : "hidden"}`} />
+                Start Browser Node
+              </Button>
+            </div>
+          )}
+          
+          {!config.isConnected && config.mode !== "demo" && config.mode !== "browser" && (
             <div className="text-center py-8 text-muted-foreground">
               <WifiOff className="h-12 w-12 mx-auto mb-3 opacity-50" />
               <p>Not connected to an IPFS node</p>
@@ -186,8 +261,25 @@ export default function Connect() {
             onValueChange={(v) => handleModeChange(v as ConnectionMode)}
             className="space-y-4"
           >
-            <div className="flex items-start space-x-3 p-4 border rounded-lg hover:border-primary/50 transition-colors">
-              <RadioGroupItem value="local" id="local" className="mt-1" />
+            <div className={`flex items-start space-x-3 p-4 border rounded-lg transition-colors ${config.mode === "browser" ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}>
+              <RadioGroupItem value="browser" id="browser" className="mt-1" data-testid="radio-browser" />
+              <div className="flex-1">
+                <Label htmlFor="browser" className="flex items-center gap-2 cursor-pointer">
+                  <Monitor className="h-4 w-4 text-primary" />
+                  Browser Node
+                  <Badge variant="secondary" className="ml-2 text-xs">Recommended</Badge>
+                </Label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Run IPFS directly in your browser. No setup required! Data stored in IndexedDB.
+                </p>
+                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                  Note: Node stops when you close the tab. For 24/7 earning, use a desktop agent.
+                </p>
+              </div>
+            </div>
+
+            <div className={`flex items-start space-x-3 p-4 border rounded-lg transition-colors ${config.mode === "local" ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}>
+              <RadioGroupItem value="local" id="local" className="mt-1" data-testid="radio-local" />
               <div className="flex-1">
                 <Label htmlFor="local" className="flex items-center gap-2 cursor-pointer">
                   <Laptop className="h-4 w-4" />
@@ -199,8 +291,8 @@ export default function Connect() {
               </div>
             </div>
             
-            <div className="flex items-start space-x-3 p-4 border rounded-lg hover:border-primary/50 transition-colors">
-              <RadioGroupItem value="remote" id="remote" className="mt-1" />
+            <div className={`flex items-start space-x-3 p-4 border rounded-lg transition-colors ${config.mode === "remote" ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}>
+              <RadioGroupItem value="remote" id="remote" className="mt-1" data-testid="radio-remote" />
               <div className="flex-1">
                 <Label htmlFor="remote" className="flex items-center gap-2 cursor-pointer">
                   <HardDrive className="h-4 w-4" />
@@ -212,8 +304,8 @@ export default function Connect() {
               </div>
             </div>
             
-            <div className="flex items-start space-x-3 p-4 border rounded-lg hover:border-primary/50 transition-colors">
-              <RadioGroupItem value="demo" id="demo" className="mt-1" />
+            <div className={`flex items-start space-x-3 p-4 border rounded-lg transition-colors ${config.mode === "demo" ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}>
+              <RadioGroupItem value="demo" id="demo" className="mt-1" data-testid="radio-demo" />
               <div className="flex-1">
                 <Label htmlFor="demo" className="flex items-center gap-2 cursor-pointer">
                   <Globe className="h-4 w-4" />
@@ -228,7 +320,7 @@ export default function Connect() {
         </CardContent>
       </Card>
 
-      {config.mode !== "demo" && (
+      {(config.mode === "local" || config.mode === "remote") && (
         <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle>Node Settings</CardTitle>
@@ -318,22 +410,40 @@ export default function Connect() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <HardDrive className="h-5 w-5" />
-            Setting Up Your Own Node
+            {config.mode === "browser" ? "About Browser Nodes" : "Setting Up Your Own Node"}
           </CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-3">
-          <p>To run your own IPFS node and earn HBD rewards:</p>
-          <ol className="list-decimal list-inside space-y-2 ml-2">
-            <li><strong>Install Kubo</strong> - Download from <a href="https://dist.ipfs.tech/#kubo" target="_blank" rel="noopener" className="text-primary hover:underline">ipfs.tech <ExternalLink className="inline h-3 w-3" /></a></li>
-            <li><strong>Initialize</strong> - Run <code className="bg-background px-1 rounded">ipfs init</code></li>
-            <li><strong>Enable CORS</strong> - Required for web access</li>
-            <li><strong>Start daemon</strong> - Run <code className="bg-background px-1 rounded">ipfs daemon</code></li>
-            <li><strong>Connect</strong> - Enter your node's API URL above</li>
-          </ol>
-          <p className="pt-2">
-            For remote access, you can run IPFS on a Raspberry Pi, home server, or VPS.
-            Make sure to configure port forwarding and firewall rules appropriately.
-          </p>
+          {config.mode === "browser" ? (
+            <>
+              <p>Your browser node runs entirely in your browser using Helia (JavaScript IPFS):</p>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li>No installation required - works immediately</li>
+                <li>Data stored locally in IndexedDB</li>
+                <li>Can add, pin, and retrieve IPFS content</li>
+                <li>Perfect for trying the network or light usage</li>
+              </ul>
+              <p className="pt-2 text-yellow-600 dark:text-yellow-400">
+                <strong>Limitation:</strong> Browser nodes stop when you close the tab. 
+                For 24/7 storage and earning HBD rewards, run a desktop node or use a Raspberry Pi.
+              </p>
+            </>
+          ) : (
+            <>
+              <p>To run your own IPFS node and earn HBD rewards:</p>
+              <ol className="list-decimal list-inside space-y-2 ml-2">
+                <li><strong>Install Kubo</strong> - Download from <a href="https://dist.ipfs.tech/#kubo" target="_blank" rel="noopener" className="text-primary hover:underline">ipfs.tech <ExternalLink className="inline h-3 w-3" /></a></li>
+                <li><strong>Initialize</strong> - Run <code className="bg-background px-1 rounded">ipfs init</code></li>
+                <li><strong>Enable CORS</strong> - Required for web access</li>
+                <li><strong>Start daemon</strong> - Run <code className="bg-background px-1 rounded">ipfs daemon</code></li>
+                <li><strong>Connect</strong> - Enter your node's API URL above</li>
+              </ol>
+              <p className="pt-2">
+                For remote access, you can run IPFS on a Raspberry Pi, home server, or VPS.
+                Make sure to configure port forwarding and firewall rules appropriately.
+              </p>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

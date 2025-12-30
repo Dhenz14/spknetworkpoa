@@ -1,9 +1,15 @@
 /**
  * Node Configuration Manager
  * Manages connection settings for IPFS nodes - stored in localStorage
+ * 
+ * Modes:
+ * - browser: In-browser Helia node (auto-starts, IndexedDB storage)
+ * - local: External IPFS on localhost:5001
+ * - remote: External IPFS on user's server/VPS/Pi
+ * - demo: Simulated mode for testing UI
  */
 
-export type ConnectionMode = "demo" | "local" | "remote";
+export type ConnectionMode = "browser" | "demo" | "local" | "remote";
 
 export interface NodeConfig {
   mode: ConnectionMode;
@@ -18,7 +24,7 @@ export interface NodeConfig {
 const STORAGE_KEY = "hivepoa_node_config";
 
 const DEFAULT_CONFIG: NodeConfig = {
-  mode: "demo",
+  mode: "browser",
   ipfsApiUrl: "http://127.0.0.1:5001",
   ipfsGatewayUrl: "http://127.0.0.1:8080",
   hiveUsername: "",

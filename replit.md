@@ -8,9 +8,15 @@ SPK Network 2.0 (HivePoA) is a comprehensive decentralized storage validation pr
 
 ## Recent Changes (December 2025)
 
-### Static PWA Architecture
-- **Node Connection UI**: Users can configure their own IPFS node connection (local/remote/demo modes)
-- **Connection Modes**: Local (localhost:5001), Remote (home server/VPS/Pi), Demo (simulated)
+### Hybrid PWA Architecture
+- **Browser Node (Helia)**: In-browser IPFS node using Helia - no installation required
+  - Auto-initializes on first use with IndexedDB persistence
+  - Repurposed patterns from SPK Network oartr/trole repositories
+  - Key Files: `client/src/lib/helia-client.ts`
+- **Desktop Agent (Future)**: Foundation for Tauri-based 24/7 desktop agent
+  - Detection API for local agent on port 5111
+  - Key Files: `client/src/lib/desktop-agent.ts`
+- **Connection Modes**: Browser (Helia), Local (localhost:5001), Remote (home server/VPS/Pi), Demo (simulated)
 - **Reactive Context**: NodeConfigContext provides real-time connection status across all components
 - **localStorage Persistence**: Node settings saved locally so users don't re-enter each time
 - **Static Build**: Run `npx tsx script/build-static.ts` to build for GitHub Pages, IPFS, or any static host
