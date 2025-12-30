@@ -49,6 +49,7 @@ Preferred communication style: Simple, everyday language.
 
 | Service | File | Description |
 |---------|------|-------------|
+| IPFS Manager | `ipfs-manager.ts` | Auto-starts IPFS daemon on server boot |
 | Hive Simulator | `hive-simulator.ts` | Emits blockchain events every 3s |
 | PoA Engine | `poa-engine.ts` | Runs validation challenges every 5s |
 | CDN Manager | `cdn-manager.ts` | Health monitoring and geo-routing |

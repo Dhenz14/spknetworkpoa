@@ -1,33 +1,41 @@
 # Local IPFS Node Setup for Testing
 
-This guide helps you set up a local IPFS node to test SPK Network 2.0 integration.
+This guide explains how SPK Network 2.0 automatically manages your IPFS node.
 
-## One-Click Setup (Recommended)
+## Zero-Config Automatic Setup
 
-Run the bootstrap script to automatically initialize and start IPFS:
+**IPFS starts automatically when you run the app.** No setup required!
 
-```bash
-./scripts/ipfs-dev.sh
-```
-
-This script will:
-1. Create an IPFS repository at `.ipfs-data/`
+When you run `npm run dev`, the application will:
+1. Initialize an IPFS repository at `.ipfs-data/` (if not exists)
 2. Configure CORS for web access
 3. Set storage limits (5GB default)
-4. Start the IPFS daemon
+4. Start the IPFS daemon automatically
+5. Set `IPFS_API_URL` environment variable
 
 **Ports:**
 - API: `http://localhost:5001` (for add/pin/cat operations)
 - Gateway: `http://localhost:8081` (for read-only access)
 
-**Environment Variables (auto-configured):**
-- `IPFS_API_URL=http://127.0.0.1:5001`
-- `IPFS_GATEWAY_URL=http://127.0.0.1:8081`
-
-**Test your connection:**
+**Verify it's running:**
 ```bash
 curl http://localhost:5000/api/ipfs/status
 curl -X POST http://localhost:5000/api/ipfs/test
+```
+
+## Manual Control (Optional)
+
+If you need to manually control the IPFS daemon:
+
+```bash
+# Start daemon
+curl -X POST http://localhost:5000/api/ipfs/start
+
+# Stop daemon
+curl -X POST http://localhost:5000/api/ipfs/stop
+
+# Restart daemon
+curl -X POST http://localhost:5000/api/ipfs/restart
 ```
 
 ---
