@@ -22,7 +22,7 @@ export class KuboManager {
     
     // In production, use the bundled binary from extraResources
     if (app.isPackaged) {
-      const resourcePath = path.join(process.resourcesPath, 'go-ipfs', `ipfs${ext}`);
+      const resourcePath = path.join(process.resourcesPath, 'kubo-bin', `ipfs${ext}`);
       console.log('[Kubo] Looking for binary at:', resourcePath);
       if (fs.existsSync(resourcePath)) {
         // Make sure it's executable on Unix
@@ -33,19 +33,26 @@ export class KuboManager {
       }
     }
 
-    // In development, use go-ipfs from node_modules
-    try {
-      const goIpfs = require('go-ipfs');
-      const goIpfsPath = goIpfs.path();
-      console.log('[Kubo] Dev binary path:', goIpfsPath);
-      if (fs.existsSync(goIpfsPath)) {
-        return goIpfsPath;
-      }
-    } catch (err) {
-      console.error('[Kubo] Failed to load go-ipfs module:', err);
+    // In development, look for downloaded kubo binary
+    const devBinaryPath = path.join(__dirname, '..', '..', 'kubo-bin', `ipfs${ext}`);
+    console.log('[Kubo] Dev binary path:', devBinaryPath);
+    if (fs.existsSync(devBinaryPath)) {
+      return devBinaryPath;
     }
 
-    throw new Error('IPFS binary not found');
+    // Fallback: try kubo npm package
+    try {
+      const kubo = require('kubo');
+      const kuboPath = kubo.path();
+      console.log('[Kubo] NPM kubo path:', kuboPath);
+      if (fs.existsSync(kuboPath)) {
+        return kuboPath;
+      }
+    } catch (err) {
+      console.error('[Kubo] Failed to load kubo module:', err);
+    }
+
+    throw new Error('IPFS binary not found. Run: npm run download-kubo');
   }
 
   async start(): Promise<void> {

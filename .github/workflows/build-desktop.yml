@@ -36,6 +36,18 @@ jobs:
         working-directory: desktop-agent
         run: npm install
 
+      - name: Download Kubo binary
+        working-directory: desktop-agent
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            node scripts/download-kubo.js win32-x64
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            node scripts/download-kubo.js darwin-x64
+          else
+            node scripts/download-kubo.js linux-x64
+          fi
+
       - name: Build application
         working-directory: desktop-agent
         run: npm run build
