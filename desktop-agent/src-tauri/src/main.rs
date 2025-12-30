@@ -34,7 +34,7 @@ fn main() {
         .add_item(show)
         .add_item(quit);
 
-    let system_tray = SystemTray::new().with_menu(tray_menu);
+    let system_tray = SystemTray::new().with_id("main").with_menu(tray_menu);
 
     let kubo_manager = Arc::new(RwLock::new(kubo::KuboManager::new()));
 
