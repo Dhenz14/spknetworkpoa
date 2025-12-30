@@ -19,28 +19,28 @@ const DOWNLOADS: Record<Platform, DownloadInfo> = {
     platform: "windows",
     label: "Windows",
     icon: <Monitor className="h-6 w-6" />,
-    filename: "SPK-Desktop_x64.msi",
+    filename: "spk-desktop_0.1.0_x64-setup.exe",
     description: "Windows 10/11 (64-bit)",
   },
   macos: {
     platform: "macos",
     label: "macOS (Intel)",
     icon: <Apple className="h-6 w-6" />,
-    filename: "SPK-Desktop_x64.dmg",
+    filename: "spk-desktop_0.1.0_x64.dmg",
     description: "macOS 10.15+ (Intel)",
   },
   "macos-arm": {
     platform: "macos-arm",
     label: "macOS (Apple Silicon)",
     icon: <Apple className="h-6 w-6" />,
-    filename: "SPK-Desktop_aarch64.dmg",
+    filename: "spk-desktop_0.1.0_aarch64.dmg",
     description: "macOS 11+ (M1/M2/M3)",
   },
   linux: {
     platform: "linux",
     label: "Linux",
     icon: <Terminal className="h-6 w-6" />,
-    filename: "spk-desktop_amd64.deb",
+    filename: "spk-desktop_0.1.0_amd64.deb",
     description: "Ubuntu/Debian (64-bit)",
   },
   unknown: {
@@ -52,8 +52,9 @@ const DOWNLOADS: Record<Platform, DownloadInfo> = {
   },
 };
 
-const GITHUB_RELEASES_URL = "https://github.com/spknetwork/spk-desktop/releases";
-const GITHUB_REPO_URL = "https://github.com/spknetwork/spk-desktop";
+const GITHUB_REPO = "Dhenz14/spknetworkpoa";
+const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_REPO}/releases`;
+const GITHUB_LATEST_DOWNLOAD = `https://github.com/${GITHUB_REPO}/releases/latest/download`;
 
 function detectPlatform(): Platform {
   if (typeof navigator === "undefined") return "unknown";
@@ -79,9 +80,33 @@ function detectPlatform(): Platform {
   return "unknown";
 }
 
-function DownloadCard({ info, recommended, comingSoon }: { info: DownloadInfo; recommended: boolean; comingSoon?: boolean }) {
-  const handleDownload = () => {
-    window.open(GITHUB_RELEASES_URL, "_blank");
+function DownloadCard({ info, recommended }: { info: DownloadInfo; recommended: boolean }) {
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState(false);
+  
+  const downloadUrl = `${GITHUB_LATEST_DOWNLOAD}/${info.filename}`;
+  
+  const handleDownload = async () => {
+    setDownloading(true);
+    setError(false);
+    
+    try {
+      // Try to download directly
+      const response = await fetch(downloadUrl, { method: 'HEAD' });
+      if (response.ok) {
+        // File exists, trigger download
+        window.location.href = downloadUrl;
+      } else {
+        // File doesn't exist yet, open releases page
+        setError(true);
+        window.open(GITHUB_RELEASES_URL, "_blank");
+      }
+    } catch {
+      // Network error or CORS, try direct download anyway
+      window.location.href = downloadUrl;
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -89,11 +114,8 @@ function DownloadCard({ info, recommended, comingSoon }: { info: DownloadInfo; r
       data-testid={`download-card-${info.platform}`}
       className={`relative transition-all hover:border-primary/50 ${recommended ? "border-primary ring-2 ring-primary/20" : ""}`}
     >
-      {recommended && !comingSoon && (
+      {recommended && (
         <Badge className="absolute -top-2 left-4 bg-primary">Recommended for you</Badge>
-      )}
-      {comingSoon && (
-        <Badge className="absolute -top-2 left-4 bg-amber-500">Coming Soon</Badge>
       )}
       <CardHeader className="pb-2">
         <div className="flex items-center gap-3">
@@ -109,14 +131,19 @@ function DownloadCard({ info, recommended, comingSoon }: { info: DownloadInfo; r
           data-testid={`download-button-${info.platform}`}
           onClick={handleDownload}
           className="w-full"
-          variant={recommended && !comingSoon ? "default" : "outline"}
+          variant={recommended ? "default" : "outline"}
+          disabled={downloading}
         >
-          <ExternalLink className="mr-2 h-4 w-4" />
-          View on GitHub
+          {downloading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="mr-2 h-4 w-4" />
+          )}
+          {downloading ? "Starting download..." : "Download"}
         </Button>
-        {comingSoon && (
+        {error && (
           <p className="text-xs text-muted-foreground mt-2 text-center">
-            Desktop builds are in development. Star the repo to get notified!
+            Build not available yet. Check the releases page for the latest builds.
           </p>
         )}
       </CardContent>
@@ -180,14 +207,13 @@ export default function DownloadPage() {
             <DownloadCard 
               info={DOWNLOADS[detectedPlatform]} 
               recommended={true}
-              comingSoon={true}
             />
           )}
           
           {Object.values(DOWNLOADS)
             .filter(d => d.platform !== "unknown" && d.platform !== detectedPlatform)
             .map(info => (
-              <DownloadCard key={info.platform} info={info} recommended={false} comingSoon={true} />
+              <DownloadCard key={info.platform} info={info} recommended={false} />
             ))}
         </div>
       </div>
