@@ -18,6 +18,18 @@ export function createRandomHash(): string {
   return crypto.createHash("sha256").update(randomBytes).digest("hex");
 }
 
+// Create salt with entropy from Hive block hash (prevents predictable challenges)
+export function createSaltWithEntropy(hiveBlockHash: string): string {
+  const randomBytes = crypto.randomBytes(16);
+  const timestamp = Date.now().toString();
+  const combined = Buffer.concat([
+    randomBytes,
+    Buffer.from(hiveBlockHash),
+    Buffer.from(timestamp),
+  ]);
+  return crypto.createHash("sha256").update(combined).digest("hex");
+}
+
 export function getIntFromHash(hash: string, length: number): number {
   if (length <= 7) {
     return 1;

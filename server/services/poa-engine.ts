@@ -1,9 +1,91 @@
 import { storage } from "../storage";
 import crypto from "crypto";
 import { getIPFSClient, IPFSClient } from "./ipfs-client";
-import { createProofHash, createRandomHash } from "./poa-crypto";
+import { createProofHash, createRandomHash, createSaltWithEntropy } from "./poa-crypto";
 import { createSPKClient, MockSPKPoAClient, SPKPoAClient } from "./spk-poa-client";
 import { createHiveClient, HiveClient, MockHiveClient } from "./hive-client";
+
+// ============================================================
+// Configuration Constants (moved from magic numbers)
+// ============================================================
+export const POA_CONFIG = {
+  // Reputation
+  SUCCESS_REP_GAIN: 1,
+  FAIL_REP_BASE_LOSS: 5,
+  FAIL_REP_MULTIPLIER: 1.5, // Exponential decay for consecutive fails
+  MAX_REP_LOSS: 20,
+  BAN_THRESHOLD: 10,
+  PROBATION_THRESHOLD: 30,
+  CONSECUTIVE_FAIL_BAN: 3,
+  
+  // Rewards
+  BASE_REWARD_HBD: 0.001,
+  STREAK_BONUS_10: 1.1,   // 10% bonus for 10 consecutive
+  STREAK_BONUS_50: 1.25,  // 25% bonus for 50 consecutive
+  STREAK_BONUS_100: 1.5,  // 50% bonus for 100 consecutive
+  
+  // Cooldown
+  BAN_COOLDOWN_HOURS: 24,
+  
+  // Challenge batching
+  CHALLENGES_PER_ROUND: 3,
+  
+  // Cache
+  BLOCK_CACHE_TTL_MS: 3600000, // 1 hour
+  BLOCK_CACHE_MAX_SIZE: 1000,
+  
+  // Timeouts
+  CHALLENGE_TIMEOUT_MS: 2000,
+};
+
+// LRU Cache with TTL for block CIDs
+interface CacheEntry<T> {
+  value: T;
+  timestamp: number;
+}
+
+class LRUCache<T> {
+  private cache = new Map<string, CacheEntry<T>>();
+  private maxSize: number;
+  private ttlMs: number;
+
+  constructor(maxSize: number, ttlMs: number) {
+    this.maxSize = maxSize;
+    this.ttlMs = ttlMs;
+  }
+
+  get(key: string): T | undefined {
+    const entry = this.cache.get(key);
+    if (!entry) return undefined;
+    
+    if (Date.now() - entry.timestamp > this.ttlMs) {
+      this.cache.delete(key);
+      return undefined;
+    }
+    
+    // Move to end (most recently used)
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+    return entry.value;
+  }
+
+  set(key: string, value: T): void {
+    // Evict oldest if at capacity
+    if (this.cache.size >= this.maxSize) {
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey) this.cache.delete(firstKey);
+    }
+    this.cache.set(key, { value, timestamp: Date.now() });
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  size(): number {
+    return this.cache.size;
+  }
+}
 
 export interface PoAConfig {
   validatorUsername: string;
@@ -21,7 +103,11 @@ export class PoAEngine {
   private ipfsClient: IPFSClient;
   private spkClient: SPKPoAClient | MockSPKPoAClient | null = null;
   private hiveClient: HiveClient | MockHiveClient;
-  private blocksCache: Map<string, string[]> = new Map();
+  private blocksCache: LRUCache<string[]>;
+  private currentHiveBlockHash: string = "";
+
+  // Track consecutive successes for streak bonuses
+  private nodeStreaks: Map<string, number> = new Map();
 
   constructor(config?: Partial<PoAConfig>) {
     this.config = {
@@ -34,6 +120,23 @@ export class PoAEngine {
     };
     this.ipfsClient = getIPFSClient();
     this.hiveClient = createHiveClient({ username: this.config.validatorUsername });
+    this.blocksCache = new LRUCache<string[]>(
+      POA_CONFIG.BLOCK_CACHE_MAX_SIZE,
+      POA_CONFIG.BLOCK_CACHE_TTL_MS
+    );
+    
+    // Simulate Hive block hash updates (in production, subscribe to blockchain)
+    this.updateHiveBlockHash();
+    setInterval(() => this.updateHiveBlockHash(), 3000); // Every 3s like Hive blocks
+  }
+
+  private updateHiveBlockHash(): void {
+    // In production: fetch from dhive client
+    // For now: generate pseudo-random based on timestamp
+    this.currentHiveBlockHash = crypto
+      .createHash("sha256")
+      .update(`hive-block-${Math.floor(Date.now() / 3000)}`)
+      .digest("hex");
   }
 
   async start(validatorUsername?: string) {
@@ -92,6 +195,58 @@ export class PoAEngine {
     }
   }
 
+  // Weighted selection: prioritize low-reputation nodes for more frequent auditing
+  private selectWeightedNode(nodes: any[]): any {
+    // Filter out nodes in cooldown
+    const now = Date.now();
+    const eligibleNodes = nodes.filter(node => {
+      if (node.status !== "banned") return true;
+      // Check cooldown for banned nodes
+      const lastSeenTime = new Date(node.lastSeen).getTime();
+      const cooldownMs = POA_CONFIG.BAN_COOLDOWN_HOURS * 60 * 60 * 1000;
+      return now - lastSeenTime > cooldownMs;
+    });
+    
+    if (eligibleNodes.length === 0) return nodes[0]; // Fallback
+    
+    // Weight: lower reputation = higher chance of selection
+    const weights = eligibleNodes.map(node => {
+      const repWeight = Math.max(1, 101 - node.reputation); // 1-100 inverted
+      const streakPenalty = (this.nodeStreaks.get(node.id) || 0) > 50 ? 0.5 : 1; // Less challenges for reliable nodes
+      return repWeight * streakPenalty;
+    });
+    
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+    let random = Math.random() * totalWeight;
+    
+    for (let i = 0; i < eligibleNodes.length; i++) {
+      random -= weights[i];
+      if (random <= 0) return eligibleNodes[i];
+    }
+    
+    return eligibleNodes[eligibleNodes.length - 1];
+  }
+
+  // Weighted file selection: prioritize high-value/less-verified files
+  private selectWeightedFile(files: any[]): any {
+    const weights = files.map(file => {
+      const sizeWeight = Math.log10(Math.max(1, file.sizeBytes || 1000)) / 10; // Larger files
+      const verifyWeight = Math.max(1, 10 - (file.replicationCount || 1)); // Less replicated
+      const ageWeight = 1; // Could add time-based weighting
+      return sizeWeight + verifyWeight + ageWeight;
+    });
+    
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+    let random = Math.random() * totalWeight;
+    
+    for (let i = 0; i < files.length; i++) {
+      random -= weights[i];
+      if (random <= 0) return files[i];
+    }
+    
+    return files[files.length - 1];
+  }
+
   private async runChallenge() {
     if (!this.validatorId) return;
 
@@ -99,34 +254,63 @@ export class PoAEngine {
     const nodes = await storage.getEligibleNodesForValidator(this.validatorId);
     if (nodes.length === 0) return;
 
-    const randomNode = nodes[Math.floor(Math.random() * nodes.length)];
-
     const files = await storage.getAllFiles();
     if (files.length === 0) return;
 
-    const randomFile = files[Math.floor(Math.random() * files.length)];
+    // OPTIMIZATION: Batch 3-5 challenges per round
+    const batchSize = Math.min(
+      POA_CONFIG.CHALLENGES_PER_ROUND,
+      nodes.length,
+      files.length
+    );
 
-    const salt = createRandomHash();
-    const challengeData = JSON.stringify({ 
-      salt, 
-      cid: randomFile.cid,
-      method: this.config.useMockMode ? "simulation" : "spk-poa",
-    });
+    const challengePromises: Promise<void>[] = [];
 
-    const challenge = await storage.createPoaChallenge({
-      validatorId: this.validatorId,
-      nodeId: randomNode.id,
-      fileId: randomFile.id,
-      challengeData,
-      response: null,
-      result: null,
-      latencyMs: null,
-    });
+    for (let i = 0; i < batchSize; i++) {
+      // OPTIMIZATION: Weighted selection for nodes and files
+      const selectedNode = this.selectWeightedNode(nodes);
+      const selectedFile = this.selectWeightedFile(files);
 
+      // OPTIMIZATION: Add Hive block hash entropy to salt
+      const salt = createSaltWithEntropy(this.currentHiveBlockHash);
+      const challengeData = JSON.stringify({ 
+        salt, 
+        cid: selectedFile.cid,
+        method: this.config.useMockMode ? "simulation" : "spk-poa",
+        blockHash: this.currentHiveBlockHash.slice(0, 16), // Include for verification
+      });
+
+      const challengePromise = (async () => {
+        const challenge = await storage.createPoaChallenge({
+          validatorId: this.validatorId!,
+          nodeId: selectedNode.id,
+          fileId: selectedFile.id,
+          challengeData,
+          response: null,
+          result: null,
+          latencyMs: null,
+        });
+        
+        await this.executeChallenge(challenge.id, selectedNode, selectedFile, salt);
+      })();
+
+      challengePromises.push(challengePromise);
+    }
+
+    // Execute all challenges in parallel
+    await Promise.allSettled(challengePromises);
+  }
+
+  private async executeChallenge(
+    challengeId: string, 
+    node: any, 
+    file: any, 
+    salt: string
+  ) {
     if (this.config.useMockMode) {
-      await this.processSimulatedChallenge(challenge.id, randomNode.id, randomFile.id, salt);
+      await this.processSimulatedChallenge(challengeId, node.id, file.id, salt);
     } else {
-      await this.processSPKChallenge(challenge.id, randomNode.id, randomFile.id, randomFile.cid, salt);
+      await this.processSPKChallenge(challengeId, node.id, file.id, file.cid, salt);
     }
   }
 
@@ -232,26 +416,34 @@ export class PoAEngine {
     const currentConsecutiveFails = (node as any).consecutiveFails || 0;
     let newConsecutiveFails = result === "success" ? 0 : currentConsecutiveFails + 1;
     
-    // Calculate reputation change
+    // Track streak for bonuses
+    const currentStreak = this.nodeStreaks.get(nodeId) || 0;
+    const newStreak = result === "success" ? currentStreak + 1 : 0;
+    this.nodeStreaks.set(nodeId, newStreak);
+    
+    // Calculate reputation change using config constants
     let newReputation: number;
     let newStatus: string;
     
     if (result === "success") {
-      newReputation = Math.min(100, node.reputation + 1);
+      newReputation = Math.min(100, node.reputation + POA_CONFIG.SUCCESS_REP_GAIN);
     } else {
       // Exponential penalty for consecutive fails
-      const penalty = Math.min(20, 5 * Math.pow(1.5, newConsecutiveFails - 1));
+      const penalty = Math.min(
+        POA_CONFIG.MAX_REP_LOSS, 
+        POA_CONFIG.FAIL_REP_BASE_LOSS * Math.pow(POA_CONFIG.FAIL_REP_MULTIPLIER, newConsecutiveFails - 1)
+      );
       newReputation = Math.max(0, node.reputation - Math.floor(penalty));
     }
 
     // OPTIMIZATION: 3 consecutive fails = instant ban (per SPK Network spec)
-    if (newConsecutiveFails >= 3) {
+    if (newConsecutiveFails >= POA_CONFIG.CONSECUTIVE_FAIL_BAN) {
       newStatus = "banned";
       newReputation = 0;
-      console.log(`[PoA] INSTANT BAN: ${node.hiveUsername} - 3 consecutive failures`);
-    } else if (newReputation < 10) {
+      console.log(`[PoA] INSTANT BAN: ${node.hiveUsername} - ${POA_CONFIG.CONSECUTIVE_FAIL_BAN} consecutive failures`);
+    } else if (newReputation < POA_CONFIG.BAN_THRESHOLD) {
       newStatus = "banned";
-    } else if (newReputation < 30) {
+    } else if (newReputation < POA_CONFIG.PROBATION_THRESHOLD) {
       newStatus = "probation";
     } else {
       newStatus = "active";
@@ -259,7 +451,7 @@ export class PoAEngine {
 
     await storage.updateStorageNodeReputation(node.id, newReputation, newStatus, newConsecutiveFails);
 
-    console.log(`[PoA] Challenge ${result}: ${node.hiveUsername} (Rep: ${node.reputation} -> ${newReputation}, Consecutive Fails: ${newConsecutiveFails})`);
+    console.log(`[PoA] Challenge ${result}: ${node.hiveUsername} (Rep: ${node.reputation} -> ${newReputation}, Streak: ${newStreak}, Consecutive Fails: ${newConsecutiveFails})`);
 
     if (this.config.broadcastToHive) {
       try {
@@ -268,7 +460,7 @@ export class PoAEngine {
             node.hiveUsername,
             node.reputation,
             newReputation,
-            newConsecutiveFails >= 3 ? "BANNED: 3 consecutive PoA failures" : "Failed PoA challenge"
+            newConsecutiveFails >= POA_CONFIG.CONSECUTIVE_FAIL_BAN ? "BANNED: 3 consecutive PoA failures" : "Failed PoA challenge"
           );
         } else {
           await this.hiveClient.broadcastPoAResult(
@@ -290,7 +482,7 @@ export class PoAEngine {
         fromUser: this.config.validatorUsername,
         toUser: node.hiveUsername,
         payload: JSON.stringify({
-          reason: newConsecutiveFails >= 3 ? "BANNED: 3 consecutive failures" : "Failed PoA challenge",
+          reason: newConsecutiveFails >= POA_CONFIG.CONSECUTIVE_FAIL_BAN ? "BANNED: 3 consecutive failures" : "Failed PoA challenge",
           oldRep: node.reputation,
           newRep: newReputation,
           consecutiveFails: newConsecutiveFails,
@@ -299,11 +491,21 @@ export class PoAEngine {
       });
     } else {
       // OPTIMIZATION: Rarity-based reward multiplier
-      // Fewer replicas = higher reward (incentivizes storing rare content)
       const replicationCount = file?.replicationCount || 1;
-      const baseReward = 0.001; // Base HBD per proof
+      const baseReward = POA_CONFIG.BASE_REWARD_HBD;
       const rarityMultiplier = 1 / Math.max(1, replicationCount);
-      const reward = baseReward * rarityMultiplier;
+      
+      // OPTIMIZATION: Streak bonus for consistent performance
+      let streakBonus = 1.0;
+      if (newStreak >= 100) {
+        streakBonus = POA_CONFIG.STREAK_BONUS_100;
+      } else if (newStreak >= 50) {
+        streakBonus = POA_CONFIG.STREAK_BONUS_50;
+      } else if (newStreak >= 10) {
+        streakBonus = POA_CONFIG.STREAK_BONUS_10;
+      }
+      
+      const reward = baseReward * rarityMultiplier * streakBonus;
       const rewardFormatted = reward.toFixed(4);
 
       // Update file earnings
@@ -320,13 +522,14 @@ export class PoAEngine {
         toUser: node.hiveUsername,
         payload: JSON.stringify({
           amount: `${rewardFormatted} HBD`,
-          memo: `PoA Reward (${replicationCount} replicas, ${rarityMultiplier.toFixed(2)}x multiplier)`,
+          memo: `PoA Reward (rarity: ${rarityMultiplier.toFixed(2)}x, streak: ${streakBonus}x)`,
           cid: cid,
+          streak: newStreak,
         }),
         blockNumber: Math.floor(Date.now() / 1000),
       });
 
-      console.log(`[PoA] Reward: ${rewardFormatted} HBD to ${node.hiveUsername} (rarity: ${rarityMultiplier.toFixed(2)}x)`);
+      console.log(`[PoA] Reward: ${rewardFormatted} HBD to ${node.hiveUsername} (rarity: ${rarityMultiplier.toFixed(2)}x, streak: ${streakBonus}x)`);
     }
   }
 
