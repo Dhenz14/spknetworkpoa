@@ -403,6 +403,8 @@ export async function registerRoutes(
         autoPinThreshold: z.number().optional(),
         maxAutoPinSize: z.string().optional(),
         encryptByDefault: z.boolean().optional(),
+        downloadMode: z.enum(["off", "all", "quota"]).optional(),
+        downloadQuota: z.number().optional(),
       });
       const data = schema.parse(req.body);
       const settings = await autoPinService.updateUserSettings(req.params.username, data);

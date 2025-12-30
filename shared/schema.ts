@@ -298,6 +298,12 @@ export const userNodeSettings = pgTable("user_node_settings", {
   autoPinThreshold: integer("auto_pin_threshold").default(60), // Only pin files with confidence > threshold
   maxAutoPinSize: text("max_auto_pin_size").default("104857600"), // 100MB default
   encryptByDefault: boolean("encrypt_by_default").notNull().default(false),
+  // Network download settings - download existing videos from network
+  downloadMode: text("download_mode").notNull().default("off"), // off, all, quota
+  downloadQuota: integer("download_quota").default(10), // Number of videos to download when mode is quota
+  downloadedToday: integer("downloaded_today").notNull().default(0), // Counter for today
+  downloadLastReset: timestamp("download_last_reset").defaultNow(), // When counter was last reset
+  downloadInProgress: boolean("download_in_progress").notNull().default(false), // Is downloading currently
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

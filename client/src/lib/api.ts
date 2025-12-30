@@ -108,6 +108,10 @@ export interface UserSettings {
   autoPinThreshold: number;
   maxAutoPinSize: string;
   encryptByDefault: boolean;
+  downloadMode: "off" | "all" | "quota";
+  downloadQuota: number;
+  downloadedToday: number;
+  downloadInProgress: boolean;
 }
 
 export const api = {
