@@ -16,8 +16,11 @@ import {
   ExternalLink,
   Copy,
   Laptop,
-  Monitor
+  Monitor,
+  Download,
+  Sparkles
 } from "lucide-react";
+import { Link } from "wouter";
 import { useNodeConfig } from "@/contexts/NodeConfigContext";
 import { formatBytes, testBackendIPFSConnection, type ConnectionMode } from "@/lib/node-config";
 
@@ -406,46 +409,81 @@ export default function Connect() {
         </Card>
       )}
 
-      <Card className="bg-muted/50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <HardDrive className="h-5 w-5" />
-            {config.mode === "browser" ? "About Browser Nodes" : "Setting Up Your Own Node"}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-3">
-          {config.mode === "browser" ? (
-            <>
-              <p>Your browser node runs entirely in your browser using Helia (JavaScript IPFS):</p>
-              <ul className="list-disc list-inside space-y-1 ml-2">
-                <li>No installation required - works immediately</li>
-                <li>Data stored locally in IndexedDB</li>
-                <li>Can add, pin, and retrieve IPFS content</li>
-                <li>Perfect for trying the network or light usage</li>
-              </ul>
-              <p className="pt-2 text-yellow-600 dark:text-yellow-400">
-                <strong>Limitation:</strong> Browser nodes stop when you close the tab. 
-                For 24/7 storage and earning HBD rewards, run a desktop node or use a Raspberry Pi.
+      {config.mode === "browser" ? (
+        <Card className="bg-muted/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Monitor className="h-5 w-5" />
+              About Browser Nodes
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-3">
+            <p>Your browser node runs entirely in your browser using Helia (JavaScript IPFS):</p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li>No installation required - works immediately</li>
+              <li>Data stored locally in IndexedDB</li>
+              <li>Can add, pin, and retrieve IPFS content</li>
+              <li>Perfect for trying the network or light usage</li>
+            </ul>
+            <div className="pt-3 p-4 bg-primary/10 border border-primary/20 rounded-lg">
+              <p className="text-foreground font-medium flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                Want 24/7 earning?
               </p>
-            </>
-          ) : (
-            <>
-              <p>To run your own IPFS node and earn HBD rewards:</p>
-              <ol className="list-decimal list-inside space-y-2 ml-2">
+              <p className="mt-1 text-muted-foreground">
+                Browser nodes stop when you close the tab. Download our Desktop Agent for automatic 24/7 operation.
+              </p>
+              <Link href="/download">
+                <Button variant="outline" size="sm" className="mt-3" data-testid="link-desktop-agent-browser">
+                  <Download className="h-4 w-4 mr-2" />
+                  Get Desktop Agent
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="bg-muted/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <HardDrive className="h-5 w-5" />
+              Setting Up Your Own Node
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm space-y-4">
+            <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg">
+              <p className="text-foreground font-medium flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                Skip the manual setup!
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                Our Desktop Agent handles everything automatically - just download, install, and start earning HBD.
+              </p>
+              <Link href="/download">
+                <Button variant="default" size="sm" className="mt-3" data-testid="link-desktop-agent-setup">
+                  <Download className="h-4 w-4 mr-2" />
+                  Download Desktop Agent
+                </Button>
+              </Link>
+            </div>
+            
+            <div className="border-t pt-4">
+              <p className="text-muted-foreground mb-3">Or set up manually:</p>
+              <ol className="list-decimal list-inside space-y-2 ml-2 text-muted-foreground">
                 <li><strong>Install Kubo</strong> - Download from <a href="https://dist.ipfs.tech/#kubo" target="_blank" rel="noopener" className="text-primary hover:underline">ipfs.tech <ExternalLink className="inline h-3 w-3" /></a></li>
                 <li><strong>Initialize</strong> - Run <code className="bg-background px-1 rounded">ipfs init</code></li>
                 <li><strong>Enable CORS</strong> - Required for web access</li>
                 <li><strong>Start daemon</strong> - Run <code className="bg-background px-1 rounded">ipfs daemon</code></li>
                 <li><strong>Connect</strong> - Enter your node's API URL above</li>
               </ol>
-              <p className="pt-2">
+              <p className="pt-3 text-muted-foreground">
                 For remote access, you can run IPFS on a Raspberry Pi, home server, or VPS.
                 Make sure to configure port forwarding and firewall rules appropriately.
               </p>
-            </>
-          )}
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
