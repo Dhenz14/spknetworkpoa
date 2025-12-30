@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { ipfsManager } from "./services/ipfs-manager";
 
 const app = express();
 const httpServer = createServer(app);
@@ -61,6 +62,18 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Start IPFS daemon automatically (like SPK Network's Docker Compose)
+  if (process.env.IPFS_API_URL) {
+    log("Starting IPFS daemon automatically...", "ipfs");
+    ipfsManager.registerShutdownHandlers();
+    const started = await ipfsManager.start();
+    if (started) {
+      log("IPFS daemon ready - uploads will use local node", "ipfs");
+    } else {
+      log("IPFS daemon failed to start - falling back to mock", "ipfs");
+    }
+  }
+
   // Seed database on startup
   const { seedDatabase } = await import("./seed");
   await seedDatabase().catch(console.error);

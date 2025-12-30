@@ -68,27 +68,70 @@ export async function registerRoutes(
   });
 
   app.get("/api/ipfs/status", async (req, res) => {
+    const { ipfsManager } = await import("./services/ipfs-manager");
     const { getIPFSClient } = await import("./services/ipfs-client");
+    
+    const managerStatus = ipfsManager.getStatus();
     const client = getIPFSClient();
     const isOnline = await client.isOnline();
     const mode = process.env.IPFS_API_URL ? "live" : "mock";
-    const apiUrl = process.env.IPFS_API_URL || "mock://in-memory";
     
     res.json({
       online: isOnline,
       mode,
-      apiUrl: mode === "live" ? apiUrl : null,
+      daemon: managerStatus,
       message: isOnline 
         ? `Connected to ${mode === "live" ? "local IPFS node" : "mock IPFS"}`
-        : "IPFS node not reachable - check if daemon is running",
+        : "IPFS node not reachable - starting automatically on next upload",
+    });
+  });
+
+  app.post("/api/ipfs/start", async (req, res) => {
+    const { ipfsManager } = await import("./services/ipfs-manager");
+    
+    if (ipfsManager.isRunning()) {
+      res.json({ success: true, message: "IPFS daemon already running" });
+      return;
+    }
+    
+    const started = await ipfsManager.start();
+    res.json({
+      success: started,
+      message: started ? "IPFS daemon started" : "Failed to start IPFS daemon",
+      status: ipfsManager.getStatus(),
+    });
+  });
+
+  app.post("/api/ipfs/stop", async (req, res) => {
+    const { ipfsManager } = await import("./services/ipfs-manager");
+    await ipfsManager.stop();
+    res.json({
+      success: true,
+      message: "IPFS daemon stopped",
+      status: ipfsManager.getStatus(),
+    });
+  });
+
+  app.post("/api/ipfs/restart", async (req, res) => {
+    const { ipfsManager } = await import("./services/ipfs-manager");
+    const restarted = await ipfsManager.restart();
+    res.json({
+      success: restarted,
+      message: restarted ? "IPFS daemon restarted" : "Failed to restart IPFS daemon",
+      status: ipfsManager.getStatus(),
     });
   });
 
   app.post("/api/ipfs/test", async (req, res) => {
     try {
+      const { ipfsManager } = await import("./services/ipfs-manager");
       const { getIPFSClient } = await import("./services/ipfs-client");
-      const client = getIPFSClient();
       
+      if (!ipfsManager.isRunning() && process.env.IPFS_API_URL) {
+        await ipfsManager.start();
+      }
+      
+      const client = getIPFSClient();
       const testContent = `SPK Network 2.0 Test - ${Date.now()}`;
       const cid = await client.add(testContent);
       const retrieved = await client.cat(cid);
