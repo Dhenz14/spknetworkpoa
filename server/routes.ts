@@ -1281,5 +1281,38 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================================
+  // Performance Analytics API
+  // ============================================================
+  
+  app.get("/api/analytics/performance", async (req, res) => {
+    const successRateTrend = Array.from({ length: 24 }, (_, i) => ({
+      hour: i + 1,
+      successRate: Number((92 + Math.random() * 7).toFixed(1)),
+      challengeCount: Math.floor(80 + Math.random() * 60),
+    }));
+
+    const totalChallenges24h = successRateTrend.reduce((sum, h) => sum + h.challengeCount, 0);
+    const avgSuccessRate = successRateTrend.reduce((sum, h) => sum + h.successRate, 0) / 24;
+    const failedChallenges = Math.floor(totalChallenges24h * (1 - avgSuccessRate / 100));
+
+    res.json({
+      proofsPerHour: Math.floor(100 + Math.random() * 50),
+      proofsTrend: Number((Math.random() * 20 - 5).toFixed(1)),
+      bandwidthPerHour: Math.floor((1 + Math.random() * 4) * 1024 * 1024 * 1024),
+      avgLatency: Math.floor(200 + Math.random() * 400),
+      minLatency: Math.floor(50 + Math.random() * 100),
+      maxLatency: Math.floor(1000 + Math.random() * 1200),
+      healthyNodes: 24,
+      atRiskNodes: Math.floor(Math.random() * 5),
+      totalNodes: 27,
+      yourRank: Math.floor(5 + Math.random() * 15),
+      successRateTrend,
+      totalChallenges24h,
+      successRate24h: Number(avgSuccessRate.toFixed(1)),
+      failedChallenges24h: failedChallenges,
+    });
+  });
+
   return httpServer;
 }
