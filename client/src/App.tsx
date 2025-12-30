@@ -19,6 +19,10 @@ import Download from "@/pages/download";
 import Earnings from "@/pages/earnings";
 import Marketplace from "@/pages/marketplace";
 import Analytics from "@/pages/analytics";
+import ValidatorDashboard from "@/pages/validator-dashboard";
+import NodeMonitoring from "@/pages/node-monitoring";
+import ChallengeQueue from "@/pages/challenge-queue";
+import FraudDetection from "@/pages/fraud-detection";
 import generatedImage from '@assets/generated_images/a_dark,_futuristic_abstract_mesh_background_with_red_accents..png';
 
 function Router() {
@@ -37,6 +41,10 @@ function Router() {
         <Route path="/earnings" component={Earnings} />
         <Route path="/marketplace" component={Marketplace} />
         <Route path="/analytics" component={Analytics} />
+        <Route path="/validator-dashboard" component={ValidatorDashboard} />
+        <Route path="/node-monitoring" component={NodeMonitoring} />
+        <Route path="/challenge-queue" component={ChallengeQueue} />
+        <Route path="/fraud-detection" component={FraudDetection} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

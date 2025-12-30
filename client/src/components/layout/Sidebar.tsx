@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, HardDrive, Wallet, Server, Settings, Globe, Hexagon, Play, Wifi, Download, Coins, ShoppingBag, BarChart3 } from "lucide-react";
+import { LayoutDashboard, HardDrive, Wallet, Server, Settings, Globe, Hexagon, Play, Wifi, Download, Coins, ShoppingBag, BarChart3, Shield, Zap, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNodeConfig } from "@/contexts/NodeConfigContext";
 
@@ -7,7 +7,7 @@ export function Sidebar() {
   const [location] = useLocation();
   const { config } = useNodeConfig();
 
-  const links = [
+  const mainLinks = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/connect", label: "Connect Node", icon: Wifi },
     { href: "/storage", label: "Storage", icon: HardDrive },
@@ -17,7 +17,17 @@ export function Sidebar() {
     { href: "/analytics", label: "Analytics", icon: BarChart3 },
     { href: "/marketplace", label: "Marketplace", icon: ShoppingBag },
     { href: "/node", label: "Node Status", icon: Server },
+  ];
+
+  const validatorLinks = [
+    { href: "/validator-dashboard", label: "Validator Ops", icon: Shield },
+    { href: "/challenge-queue", label: "Challenges", icon: Zap },
+    { href: "/node-monitoring", label: "Node Monitor", icon: Server },
+    { href: "/fraud-detection", label: "Fraud Detection", icon: AlertTriangle },
     { href: "/validators", label: "Validators", icon: Globe },
+  ];
+
+  const settingsLinks = [
     { href: "/download", label: "Desktop Agent", icon: Download },
     { href: "/settings", label: "Settings", icon: Settings },
   ];
@@ -31,8 +41,58 @@ export function Sidebar() {
         <span className="font-display font-bold text-xl tracking-tight">HivePoA</span>
       </div>
 
-      <nav className="flex-1 p-4 space-y-1">
-        {links.map((link) => {
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        {mainLinks.map((link) => {
+          const Icon = link.icon;
+          const isActive = location === link.href;
+          return (
+            <Link 
+              key={link.href} 
+              href={link.href}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 group",
+                isActive 
+                  ? "bg-primary/10 text-primary" 
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+              )}
+            >
+              <Icon className={cn("w-4 h-4", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+              {link.label}
+            </Link>
+          );
+        })}
+
+        <div className="pt-4 pb-2">
+          <span className="px-3 text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider">
+            Validator
+          </span>
+        </div>
+        {validatorLinks.map((link) => {
+          const Icon = link.icon;
+          const isActive = location === link.href;
+          return (
+            <Link 
+              key={link.href} 
+              href={link.href}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 group",
+                isActive 
+                  ? "bg-primary/10 text-primary" 
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+              )}
+            >
+              <Icon className={cn("w-4 h-4", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+              {link.label}
+            </Link>
+          );
+        })}
+
+        <div className="pt-4 pb-2">
+          <span className="px-3 text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider">
+            System
+          </span>
+        </div>
+        {settingsLinks.map((link) => {
           const Icon = link.icon;
           const isActive = location === link.href;
           return (

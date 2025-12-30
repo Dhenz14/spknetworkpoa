@@ -1172,6 +1172,371 @@ export async function registerRoutes(
   }
 
   // ============================================================
+  // Validator Operations Center API
+  // ============================================================
+
+  // Get validator dashboard stats
+  app.get("/api/validator/dashboard/:username", async (req, res) => {
+    const { username } = req.params;
+    const validators = await storage.getAllValidators();
+    let validator = validators.find(v => v.hiveUsername === username);
+    
+    // Allow demo_user to use first validator
+    if (!validator && username === "demo_user" && validators.length > 0) {
+      validator = validators[0];
+    }
+    
+    if (!validator) {
+      res.status(404).json({ error: "Validator not found" });
+      return;
+    }
+
+    const challenges = await storage.getRecentChallenges(1000);
+    const validatorChallenges = challenges.filter(c => c.validatorId === validator.id);
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    
+    // Challenge stats by time period
+    const todayChallenges = validatorChallenges.filter(c => 
+      now - new Date(c.createdAt).getTime() < dayMs
+    );
+    const weekChallenges = validatorChallenges.filter(c => 
+      now - new Date(c.createdAt).getTime() < 7 * dayMs
+    );
+    const monthChallenges = validatorChallenges.filter(c => 
+      now - new Date(c.createdAt).getTime() < 30 * dayMs
+    );
+    
+    // Success/fail ratio
+    const totalChallenges = validatorChallenges.length;
+    const successCount = validatorChallenges.filter(c => c.result === "success").length;
+    const failCount = validatorChallenges.filter(c => c.result === "fail").length;
+    const timeoutCount = validatorChallenges.filter(c => c.result === "timeout").length;
+    
+    // Latency metrics
+    const latencies = validatorChallenges.filter(c => c.latencyMs).map(c => c.latencyMs!);
+    const avgLatency = latencies.length > 0 ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0;
+    const p95Latency = latencies.length > 0 ? latencies.sort((a, b) => a - b)[Math.floor(latencies.length * 0.95)] : 0;
+    
+    // Calculate uptime (simulate based on activity)
+    const hourlyActivity: boolean[] = [];
+    for (let i = 0; i < 24; i++) {
+      const hourStart = now - (i + 1) * 60 * 60 * 1000;
+      const hourEnd = now - i * 60 * 60 * 1000;
+      const hasActivity = validatorChallenges.some(c => {
+        const t = new Date(c.createdAt).getTime();
+        return t > hourStart && t <= hourEnd;
+      });
+      hourlyActivity.push(hasActivity);
+    }
+    const uptime = (hourlyActivity.filter(Boolean).length / 24) * 100;
+    
+    // Cheaters caught (failures detected)
+    const cheatersCaught = validatorChallenges.filter(c => c.result === "fail").length;
+    
+    res.json({
+      validator: {
+        id: validator.id,
+        username: validator.hiveUsername,
+        rank: validator.hiveRank,
+        status: validator.status,
+        performance: validator.performance,
+        version: validator.version,
+      },
+      stats: {
+        today: todayChallenges.length,
+        week: weekChallenges.length,
+        month: monthChallenges.length,
+        total: totalChallenges,
+      },
+      results: {
+        success: successCount,
+        fail: failCount,
+        timeout: timeoutCount,
+        successRate: totalChallenges > 0 ? (successCount / totalChallenges * 100).toFixed(1) : "0.0",
+        cheatersCaught,
+      },
+      latency: {
+        avg: Math.round(avgLatency),
+        p95: p95Latency,
+        min: Math.min(...latencies, 0),
+        max: Math.max(...latencies, 0),
+      },
+      uptime: uptime.toFixed(1),
+      earnings: validator.payoutRate * totalChallenges * 0.0001, // Simulated earnings
+    });
+  });
+
+  // Get node monitoring data
+  app.get("/api/validator/nodes", async (req, res) => {
+    const nodes = await storage.getAllStorageNodes();
+    const challenges = await storage.getRecentChallenges(500);
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    
+    const nodesWithDetails = nodes.map(node => {
+      const nodeChallenges = challenges.filter(c => c.nodeId === node.id);
+      const recentChallenges = nodeChallenges.filter(c => 
+        now - new Date(c.createdAt).getTime() < dayMs
+      );
+      const successCount = recentChallenges.filter(c => c.result === "success").length;
+      const failCount = recentChallenges.filter(c => c.result === "fail").length;
+      
+      // Calculate average latency
+      const latencies = nodeChallenges.filter(c => c.latencyMs).map(c => c.latencyMs!);
+      const avgLatency = latencies.length > 0 ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0;
+      
+      // Determine risk level
+      const consecutiveFails = (node as any).consecutiveFails || 0;
+      let riskLevel = "healthy";
+      if (consecutiveFails >= 2) riskLevel = "critical";
+      else if (consecutiveFails >= 1) riskLevel = "warning";
+      else if (node.reputation < 30) riskLevel = "at-risk";
+      else if (node.status === "probation") riskLevel = "probation";
+      
+      return {
+        id: node.id,
+        peerId: node.peerId,
+        username: node.hiveUsername,
+        reputation: node.reputation,
+        status: node.status,
+        consecutiveFails,
+        totalProofs: node.totalProofs,
+        failedProofs: node.failedProofs,
+        lastSeen: node.lastSeen,
+        riskLevel,
+        recentStats: {
+          challenges: recentChallenges.length,
+          success: successCount,
+          fail: failCount,
+          successRate: recentChallenges.length > 0 
+            ? (successCount / recentChallenges.length * 100).toFixed(1) 
+            : "100.0",
+        },
+        avgLatency: Math.round(avgLatency),
+      };
+    });
+    
+    // Group by risk level
+    const atRisk = nodesWithDetails.filter(n => n.riskLevel === "at-risk" || n.consecutiveFails >= 2);
+    const banned = nodesWithDetails.filter(n => n.status === "banned");
+    const probation = nodesWithDetails.filter(n => n.status === "probation" || n.riskLevel === "probation");
+    const healthy = nodesWithDetails.filter(n => n.riskLevel === "healthy" && n.status === "active");
+    
+    res.json({
+      all: nodesWithDetails,
+      atRisk,
+      banned,
+      probation,
+      healthy,
+      summary: {
+        total: nodes.length,
+        healthy: healthy.length,
+        atRisk: atRisk.length,
+        banned: banned.length,
+        probation: probation.length,
+      },
+    });
+  });
+
+  // Get node detail with challenge history
+  app.get("/api/validator/nodes/:nodeId", async (req, res) => {
+    const { nodeId } = req.params;
+    const nodes = await storage.getAllStorageNodes();
+    const node = nodes.find(n => n.id === nodeId);
+    
+    if (!node) {
+      res.status(404).json({ error: "Node not found" });
+      return;
+    }
+    
+    const challenges = await storage.getRecentChallenges(500);
+    const nodeChallenges = challenges.filter(c => c.nodeId === nodeId);
+    const files = await storage.getAllFiles();
+    
+    const challengeHistory = nodeChallenges.map(c => {
+      const file = files.find(f => f.id === c.fileId);
+      return {
+        id: c.id,
+        result: c.result,
+        latencyMs: c.latencyMs,
+        response: c.response,
+        createdAt: c.createdAt,
+        file: file ? { name: file.name, cid: file.cid } : null,
+      };
+    });
+    
+    res.json({
+      node: {
+        id: node.id,
+        peerId: node.peerId,
+        username: node.hiveUsername,
+        reputation: node.reputation,
+        status: node.status,
+        consecutiveFails: (node as any).consecutiveFails || 0,
+        totalProofs: node.totalProofs,
+        failedProofs: node.failedProofs,
+        totalEarnedHbd: (node as any).totalEarnedHbd || 0,
+        lastSeen: node.lastSeen,
+        createdAt: node.createdAt,
+      },
+      challengeHistory,
+      stats: {
+        total: nodeChallenges.length,
+        success: nodeChallenges.filter(c => c.result === "success").length,
+        fail: nodeChallenges.filter(c => c.result === "fail").length,
+        timeout: nodeChallenges.filter(c => c.result === "timeout").length,
+      },
+    });
+  });
+
+  // Get challenge queue (pending, active, history)
+  app.get("/api/validator/challenges", async (req, res) => {
+    const challenges = await storage.getRecentChallenges(100);
+    const nodes = await storage.getAllStorageNodes();
+    const files = await storage.getAllFiles();
+    const validators = await storage.getAllValidators();
+    
+    const enrichedChallenges = challenges.map(c => {
+      const node = nodes.find(n => n.id === c.nodeId);
+      const file = files.find(f => f.id === c.fileId);
+      const validator = validators.find(v => v.id === c.validatorId);
+      return {
+        id: c.id,
+        result: c.result,
+        latencyMs: c.latencyMs,
+        response: c.response,
+        challengeData: c.challengeData,
+        createdAt: c.createdAt,
+        node: node ? { id: node.id, username: node.hiveUsername, reputation: node.reputation } : null,
+        file: file ? { id: file.id, name: file.name, cid: file.cid } : null,
+        validator: validator ? { username: validator.hiveUsername } : null,
+      };
+    });
+    
+    // Group by status
+    const pending = enrichedChallenges.filter(c => !c.result);
+    const completed = enrichedChallenges.filter(c => c.result);
+    const failed = completed.filter(c => c.result === "fail" || c.result === "timeout");
+    
+    res.json({
+      pending,
+      completed,
+      failed,
+      history: enrichedChallenges,
+    });
+  });
+
+  // Get fraud detection data
+  app.get("/api/validator/fraud", async (req, res) => {
+    const challenges = await storage.getRecentChallenges(500);
+    const nodes = await storage.getAllStorageNodes();
+    const now = Date.now();
+    
+    // Analyze suspicious patterns
+    const nodeLatencies: Record<string, number[]> = {};
+    const nodeResults: Record<string, { pass: number; fail: number }> = {};
+    
+    for (const c of challenges) {
+      if (!nodeLatencies[c.nodeId]) nodeLatencies[c.nodeId] = [];
+      if (!nodeResults[c.nodeId]) nodeResults[c.nodeId] = { pass: 0, fail: 0 };
+      
+      if (c.latencyMs) nodeLatencies[c.nodeId].push(c.latencyMs);
+      if (c.result === "success") nodeResults[c.nodeId].pass++;
+      else if (c.result === "fail") nodeResults[c.nodeId].fail++;
+    }
+    
+    // Detect suspicious patterns
+    const suspiciousPatterns: any[] = [];
+    const hashMismatches: any[] = [];
+    
+    for (const [nodeId, latencies] of Object.entries(nodeLatencies)) {
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node || latencies.length < 5) continue;
+      
+      const avg = latencies.reduce((a, b) => a + b, 0) / latencies.length;
+      const variance = latencies.reduce((sum, l) => sum + Math.pow(l - avg, 2), 0) / latencies.length;
+      const stdDev = Math.sqrt(variance);
+      
+      // High variance might indicate proxying/outsourcing
+      if (stdDev > avg * 0.8) {
+        suspiciousPatterns.push({
+          type: "high_variance",
+          nodeId,
+          nodeUsername: node.hiveUsername,
+          description: "Unusually inconsistent response times - possible outsourcing",
+          avgLatency: Math.round(avg),
+          stdDev: Math.round(stdDev),
+          severity: stdDev > avg ? "high" : "medium",
+        });
+      }
+      
+      // Very fast responses might indicate caching/cheating
+      if (avg < 50 && latencies.length > 10) {
+        suspiciousPatterns.push({
+          type: "too_fast",
+          nodeId,
+          nodeUsername: node.hiveUsername,
+          description: "Suspiciously fast response times - possible caching",
+          avgLatency: Math.round(avg),
+          severity: avg < 20 ? "high" : "medium",
+        });
+      }
+    }
+    
+    // Collect hash mismatches (failed proofs)
+    const failedChallenges = challenges.filter(c => c.result === "fail");
+    for (const c of failedChallenges.slice(0, 20)) {
+      const node = nodes.find(n => n.id === c.nodeId);
+      hashMismatches.push({
+        id: c.id,
+        nodeId: c.nodeId,
+        nodeUsername: node?.hiveUsername || "unknown",
+        timestamp: c.createdAt,
+        challengeData: c.challengeData,
+        response: c.response || "No response",
+      });
+    }
+    
+    // Detect potential collusion (nodes with identical pass/fail patterns)
+    const collusionAlerts: any[] = [];
+    const nodeIds = Object.keys(nodeResults);
+    for (let i = 0; i < nodeIds.length; i++) {
+      for (let j = i + 1; j < nodeIds.length; j++) {
+        const r1 = nodeResults[nodeIds[i]];
+        const r2 = nodeResults[nodeIds[j]];
+        if (r1.pass + r1.fail >= 10 && r2.pass + r2.fail >= 10) {
+          const ratio1 = r1.pass / (r1.pass + r1.fail);
+          const ratio2 = r2.pass / (r2.pass + r2.fail);
+          if (Math.abs(ratio1 - ratio2) < 0.05 && ratio1 < 0.8) {
+            const node1 = nodes.find(n => n.id === nodeIds[i]);
+            const node2 = nodes.find(n => n.id === nodeIds[j]);
+            collusionAlerts.push({
+              nodes: [
+                { id: nodeIds[i], username: node1?.hiveUsername },
+                { id: nodeIds[j], username: node2?.hiveUsername },
+              ],
+              similarity: (1 - Math.abs(ratio1 - ratio2)) * 100,
+              description: "Similar failure patterns detected",
+            });
+          }
+        }
+      }
+    }
+    
+    res.json({
+      suspiciousPatterns,
+      hashMismatches,
+      collusionAlerts: collusionAlerts.slice(0, 10),
+      summary: {
+        totalSuspicious: suspiciousPatterns.length,
+        totalMismatches: hashMismatches.length,
+        totalCollusionAlerts: collusionAlerts.length,
+      },
+    });
+  });
+
+  // ============================================================
   // 3Speak Network Browsing API
   // ============================================================
   
