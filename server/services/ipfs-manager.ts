@@ -1,5 +1,5 @@
 import { spawn, ChildProcess, execSync } from "child_process";
-import { existsSync, mkdirSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync } from "fs";
 import path from "path";
 
 export interface IPFSManagerConfig {
@@ -241,13 +241,17 @@ export class IPFSManager {
 
   registerShutdownHandlers() {
     const shutdown = async () => {
-      this.log("Received shutdown signal...");
+      this.log("Received shutdown signal, stopping daemon...");
       await this.stop();
-      process.exit(0);
     };
 
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
+    process.on("beforeExit", shutdown);
+  }
+
+  getApiUrl(): string {
+    return `http://127.0.0.1:${this.config.apiPort}`;
   }
 }
 

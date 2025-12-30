@@ -63,15 +63,14 @@ app.use((req, res, next) => {
 
 (async () => {
   // Start IPFS daemon automatically (like SPK Network's Docker Compose)
-  if (process.env.IPFS_API_URL) {
-    log("Starting IPFS daemon automatically...", "ipfs");
-    ipfsManager.registerShutdownHandlers();
-    const started = await ipfsManager.start();
-    if (started) {
-      log("IPFS daemon ready - uploads will use local node", "ipfs");
-    } else {
-      log("IPFS daemon failed to start - falling back to mock", "ipfs");
-    }
+  log("Starting IPFS daemon automatically...", "ipfs");
+  ipfsManager.registerShutdownHandlers();
+  const started = await ipfsManager.start();
+  if (started) {
+    process.env.IPFS_API_URL = ipfsManager.getApiUrl();
+    log(`IPFS daemon ready - uploads will use local node at ${process.env.IPFS_API_URL}`, "ipfs");
+  } else {
+    log("IPFS daemon failed to start - falling back to mock", "ipfs");
   }
 
   // Seed database on startup
