@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, Monitor, Apple, Terminal, CheckCircle2, Loader2, ExternalLink } from "lucide-react";
+import { Download, Monitor, Apple, Terminal, CheckCircle2, ExternalLink } from "lucide-react";
 
 type Platform = "windows" | "macos" | "macos-arm" | "linux" | "unknown";
 
@@ -81,32 +81,11 @@ function detectPlatform(): Platform {
 }
 
 function DownloadCard({ info, recommended }: { info: DownloadInfo; recommended: boolean }) {
-  const [downloading, setDownloading] = useState(false);
-  const [error, setError] = useState(false);
-  
   const downloadUrl = `${GITHUB_LATEST_DOWNLOAD}/${info.filename}`;
   
-  const handleDownload = async () => {
-    setDownloading(true);
-    setError(false);
-    
-    try {
-      // Try to download directly
-      const response = await fetch(downloadUrl, { method: 'HEAD' });
-      if (response.ok) {
-        // File exists, trigger download
-        window.location.href = downloadUrl;
-      } else {
-        // File doesn't exist yet, open releases page
-        setError(true);
-        window.open(GITHUB_RELEASES_URL, "_blank");
-      }
-    } catch {
-      // Network error or CORS, try direct download anyway
-      window.location.href = downloadUrl;
-    } finally {
-      setDownloading(false);
-    }
+  const handleDownload = () => {
+    // Open download in new tab - this works better with GitHub's download redirects
+    window.open(downloadUrl, "_blank");
   };
 
   return (
@@ -132,20 +111,10 @@ function DownloadCard({ info, recommended }: { info: DownloadInfo; recommended: 
           onClick={handleDownload}
           className="w-full"
           variant={recommended ? "default" : "outline"}
-          disabled={downloading}
         >
-          {downloading ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Download className="mr-2 h-4 w-4" />
-          )}
-          {downloading ? "Starting download..." : "Download"}
+          <Download className="mr-2 h-4 w-4" />
+          Download
         </Button>
-        {error && (
-          <p className="text-xs text-muted-foreground mt-2 text-center">
-            Build not available yet. Check the releases page for the latest builds.
-          </p>
-        )}
       </CardContent>
     </Card>
   );
