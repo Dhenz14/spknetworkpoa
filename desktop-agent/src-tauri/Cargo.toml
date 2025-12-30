@@ -24,7 +24,6 @@ once_cell = "1.19"
 lazy_static = "1.4"
 sha2 = "0.10"
 hex = "0.4"
-notify-rust = "4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.52"
