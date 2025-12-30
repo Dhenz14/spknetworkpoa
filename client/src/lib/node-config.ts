@@ -88,6 +88,27 @@ export async function testIPFSConnection(apiUrl: string): Promise<{
   }
 }
 
+export async function testBackendIPFSConnection(): Promise<{
+  success: boolean;
+  peerId?: string;
+  error?: string;
+}> {
+  try {
+    const response = await fetch("/api/ipfs/test-connection", {
+      method: "POST",
+    });
+    
+    if (!response.ok) {
+      return { success: false, error: `HTTP ${response.status}` };
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (e: any) {
+    return { success: false, error: e.message || "Connection failed" };
+  }
+}
+
 export async function getIPFSStats(apiUrl: string): Promise<{
   repoSize: number;
   numObjects: number;

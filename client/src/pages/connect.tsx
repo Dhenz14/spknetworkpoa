@@ -18,7 +18,7 @@ import {
   Laptop
 } from "lucide-react";
 import { useNodeConfig } from "@/contexts/NodeConfigContext";
-import { formatBytes, type ConnectionMode } from "@/lib/node-config";
+import { formatBytes, testBackendIPFSConnection, type ConnectionMode } from "@/lib/node-config";
 
 export default function Connect() {
   const { toast } = useToast();
@@ -61,6 +61,28 @@ export default function Connect() {
     if (config.peerId) {
       navigator.clipboard.writeText(config.peerId);
       toast({ title: "Copied!", description: "Peer ID copied to clipboard" });
+    }
+  };
+
+  const handleUseBackend = async () => {
+    const result = await testBackendIPFSConnection();
+    
+    if (result.success) {
+      updateConfig({ 
+        isConnected: true, 
+        peerId: result.peerId || "server-ipfs",
+        ipfsApiUrl: "/api/ipfs",
+      });
+      toast({
+        title: "Connected to Server IPFS!",
+        description: "Using the backend's IPFS node for development",
+      });
+    } else {
+      toast({
+        title: "Backend Connection Failed",
+        description: result.error || "Could not connect to server IPFS",
+        variant: "destructive",
+      });
     }
   };
 
@@ -275,7 +297,19 @@ export default function Connect() {
                 )}
                 {isTesting ? "Testing..." : config.isConnected ? "Reconnect" : "Test Connection"}
               </Button>
+              <Button
+                data-testid="button-use-backend"
+                onClick={handleUseBackend}
+                disabled={isTesting}
+                variant="outline"
+              >
+                <Server className="h-4 w-4 mr-2" />
+                Use Server IPFS
+              </Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              "Test Connection" connects directly from your browser. "Use Server IPFS" uses the backend's IPFS node (for development/demo).
+            </p>
           </CardContent>
         </Card>
       )}

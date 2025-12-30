@@ -122,6 +122,39 @@ export async function registerRoutes(
     });
   });
 
+  app.post("/api/ipfs/test-connection", async (req, res) => {
+    try {
+      const { ipfsManager } = await import("./services/ipfs-manager");
+      const { getIPFSClient } = await import("./services/ipfs-client");
+      
+      if (!ipfsManager.isRunning()) {
+        await ipfsManager.start();
+      }
+      
+      const client = getIPFSClient();
+      const isOnline = await client.isOnline();
+      
+      if (isOnline) {
+        const status = ipfsManager.getStatus();
+        res.json({
+          success: true,
+          peerId: "server-ipfs-node",
+          apiUrl: status.apiUrl || "http://127.0.0.1:5001",
+        });
+      } else {
+        res.json({
+          success: false,
+          error: "IPFS node not reachable",
+        });
+      }
+    } catch (err: any) {
+      res.json({
+        success: false,
+        error: err.message || "Connection failed",
+      });
+    }
+  });
+
   app.post("/api/ipfs/test", async (req, res) => {
     try {
       const { ipfsManager } = await import("./services/ipfs-manager");
