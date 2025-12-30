@@ -42,14 +42,30 @@ jobs:
             node scripts/download-kubo.js linux-x64
           fi
 
-      - name: Build/Release Electron app
-        uses: samuelmeuli/action-electron-builder@v1.6.0
-        with:
-          package_root: desktop-agent
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          release: false
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libarchive-tools rpm
+
+      - name: Build application
+        working-directory: desktop-agent
+        run: npm run build
+
+      - name: Package application
+        working-directory: desktop-agent
+        shell: bash
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           USE_HARD_LINKS: false
+        run: |
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            npx electron-builder --win --x64 --dir
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            npx electron-builder --mac --x64 --dir
+          else
+            npx electron-builder --linux --x64
+          fi
 
       - name: List build output
         working-directory: desktop-agent
