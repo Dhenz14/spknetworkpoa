@@ -40,18 +40,6 @@ export class KuboManager {
       return devBinaryPath;
     }
 
-    // Fallback: try kubo npm package
-    try {
-      const kubo = require('kubo');
-      const kuboPath = kubo.path();
-      console.log('[Kubo] NPM kubo path:', kuboPath);
-      if (fs.existsSync(kuboPath)) {
-        return kuboPath;
-      }
-    } catch (err) {
-      console.error('[Kubo] Failed to load kubo module:', err);
-    }
-
     throw new Error('IPFS binary not found. Run: npm run download-kubo');
   }
 
