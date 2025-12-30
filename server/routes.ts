@@ -888,7 +888,12 @@ export async function registerRoutes(
   app.get("/api/earnings/:username", async (req, res) => {
     const { username } = req.params;
     const nodes = await storage.getAllStorageNodes();
-    const node = nodes.find(n => n.hiveUsername === username) || nodes[0];
+    
+    // Allow "demo_user" to use first available node for demo purposes
+    let node = nodes.find(n => n.hiveUsername === username);
+    if (!node && username === "demo_user" && nodes.length > 0) {
+      node = nodes[0];
+    }
     
     if (!node) {
       res.status(404).json({ error: "Node not found" });
@@ -898,23 +903,30 @@ export async function registerRoutes(
     const challenges = await storage.getRecentChallenges(1000);
     const nodeChallenges = challenges.filter(c => c.nodeId === node.id);
     const transactions = await storage.getRecentTransactions(24 * 60 * 7); // 7 days
-    const nodeTransactions = transactions.filter(t => t.toUser === username && t.type === "hbd_transfer");
+    const nodeTransactions = transactions.filter(t => t.toUser === node.hiveUsername && t.type === "hbd_transfer");
     
-    // Calculate streaks
+    // Calculate streaks - count consecutive successes from most recent
     let currentStreak = 0;
     let maxStreak = 0;
     let tempStreak = 0;
-    const sortedChallenges = nodeChallenges.sort((a, b) => 
+    const sortedChallenges = [...nodeChallenges].sort((a, b) => 
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
     
+    // Current streak = consecutive successes from most recent challenge
+    for (const c of sortedChallenges) {
+      if (c.result === "success") {
+        currentStreak++;
+      } else {
+        break; // Stop at first failure
+      }
+    }
+    
+    // Max streak = longest consecutive success run ever
     for (const c of sortedChallenges) {
       if (c.result === "success") {
         tempStreak++;
         if (tempStreak > maxStreak) maxStreak = tempStreak;
-        if (currentStreak === 0 || currentStreak === tempStreak - 1) {
-          currentStreak = tempStreak;
-        }
       } else {
         tempStreak = 0;
       }

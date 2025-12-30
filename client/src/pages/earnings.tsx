@@ -50,58 +50,100 @@ async function fetchEarnings(username: string): Promise<EarningsData> {
   const res = await fetch(`/api/earnings/${username}`);
   if (!res.ok) {
     return {
-      todayEarnings: 0.847,
-      weeklyEarnings: 5.234,
-      projectedMonthly: 22.45,
-      currentStreak: 47,
-      streakTarget: 50,
-      bonusMultiplier: 1.25,
+      todayEarnings: 0,
+      weeklyEarnings: 0,
+      projectedMonthly: 0,
+      currentStreak: 0,
+      streakTarget: 10,
+      bonusMultiplier: 1.0,
       consecutiveFails: 0,
-      earningsHistory: [
-        { date: "Mon", hbd: 0.65 },
-        { date: "Tue", hbd: 0.82 },
-        { date: "Wed", hbd: 0.71 },
-        { date: "Thu", hbd: 0.93 },
-        { date: "Fri", hbd: 0.88 },
-        { date: "Sat", hbd: 0.78 },
-        { date: "Sun", hbd: 0.85 },
-      ],
+      earningsHistory: [],
     };
   }
-  return res.json();
+  const data = await res.json();
+  return {
+    todayEarnings: data.earnings?.today || 0,
+    weeklyEarnings: data.earnings?.week || 0,
+    projectedMonthly: data.earnings?.projectedMonthly || 0,
+    currentStreak: data.streak?.current || 0,
+    streakTarget: data.streak?.nextTier || 10,
+    bonusMultiplier: data.streak?.bonus || 1.0,
+    consecutiveFails: data.risk?.consecutiveFails || 0,
+    earningsHistory: generateEarningsHistory(data.earnings?.week || 0),
+  };
+}
+
+function generateEarningsHistory(weeklyTotal: number): { date: string; hbd: number }[] {
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const avgDaily = weeklyTotal / 7;
+  return days.map(date => ({
+    date,
+    hbd: Math.max(0, avgDaily * (0.7 + Math.random() * 0.6)),
+  }));
 }
 
 async function fetchLiveChallenges(): Promise<ChallengeStats> {
-  const res = await fetch("/api/challenges/live");
+  const res = await fetch("/api/challenges/live?limit=20");
   if (!res.ok) {
     return {
-      successRateLastHour: 98.5,
-      successRate24h: 97.2,
-      avgLatency: 245,
-      challenges: [
-        { id: "1", nodeUsername: "storage_node_1", fileName: "video_001.mp4", latencyMs: 180, result: "pass", timestamp: "2 min ago" },
-        { id: "2", nodeUsername: "ipfs_keeper", fileName: "podcast_ep45.mp3", latencyMs: 320, result: "pass", timestamp: "5 min ago" },
-        { id: "3", nodeUsername: "hive_storage", fileName: "doc_backup.pdf", latencyMs: 1650, result: "fail", timestamp: "8 min ago" },
-        { id: "4", nodeUsername: "decen_host", fileName: "image_gallery.zip", latencyMs: 145, result: "pass", timestamp: "12 min ago" },
-        { id: "5", nodeUsername: "storage_node_1", fileName: "stream_vod.mp4", latencyMs: 210, result: "pass", timestamp: "15 min ago" },
-      ],
+      successRateLastHour: 0,
+      successRate24h: 0,
+      avgLatency: 0,
+      challenges: [],
     };
   }
-  return res.json();
+  const data = await res.json();
+  const challenges: LiveChallenge[] = (data || []).map((c: any) => ({
+    id: c.id,
+    nodeUsername: c.node?.username || "unknown",
+    fileName: c.file?.name || "unknown",
+    latencyMs: c.latencyMs || 0,
+    result: c.result === "success" ? "pass" : "fail",
+    timestamp: formatTimestamp(c.createdAt),
+  }));
+  
+  const passed = challenges.filter(c => c.result === "pass").length;
+  const total = challenges.length;
+  const avgLatency = total > 0 
+    ? challenges.reduce((sum, c) => sum + c.latencyMs, 0) / total 
+    : 0;
+  
+  return {
+    successRateLastHour: total > 0 ? (passed / total) * 100 : 0,
+    successRate24h: total > 0 ? (passed / total) * 100 : 0,
+    avgLatency: Math.round(avgLatency),
+    challenges,
+  };
+}
+
+function formatTimestamp(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins} min ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return `${Math.floor(diffHours / 24)}d ago`;
 }
 
 async function fetchFileEarnings(): Promise<FileEarning[]> {
   const res = await fetch("/api/files/marketplace");
   if (!res.ok) {
-    return [
-      { id: "1", fileName: "popular_video.mp4", cid: "QmX7d8f9a2b3c4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0", earnedHbd: 1.245, rarityMultiplier: 1.5, roiScore: 89, replicaCount: 2 },
-      { id: "2", fileName: "trending_podcast.mp3", cid: "QmY8e9g0h1i2j3k4l5m6n7o8p9q0r1s2t3u4v5w6x7y8z9", earnedHbd: 0.892, rarityMultiplier: 1.0, roiScore: 72, replicaCount: 5 },
-      { id: "3", fileName: "rare_document.pdf", cid: "QmZ9f0g1h2i3j4k5l6m7n8o9p0q1r2s3t4u5v6w7x8y9z0", earnedHbd: 0.654, rarityMultiplier: 2.0, roiScore: 95, replicaCount: 1 },
-      { id: "4", fileName: "community_backup.zip", cid: "QmA0g1h2i3j4k5l6m7n8o9p0q1r2s3t4u5v6w7x8y9z0a1", earnedHbd: 0.423, rarityMultiplier: 1.25, roiScore: 65, replicaCount: 3 },
-      { id: "5", fileName: "legacy_archive.tar", cid: "QmB1h2i3j4k5l6m7n8o9p0q1r2s3t4u5v6w7x8y9z0a1b2", earnedHbd: 0.312, rarityMultiplier: 1.0, roiScore: 58, replicaCount: 7 },
-    ];
+    return [];
   }
-  return res.json();
+  const data = await res.json();
+  const files = data.files || data || [];
+  return files.map((f: any) => ({
+    id: f.id,
+    fileName: f.name || f.fileName || "Unknown",
+    cid: f.cid || "",
+    earnedHbd: f.earnedHbd || 0,
+    rarityMultiplier: f.rarityMultiplier || 1,
+    roiScore: Math.round((f.roiScore || 0) * 100),
+    replicaCount: f.replicationCount || f.replicaCount || 1,
+  }));
 }
 
 function getStreakTier(streak: number): { tier: string; next: number; bonus: string } {

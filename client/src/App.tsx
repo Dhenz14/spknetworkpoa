@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { NodeConfigProvider } from "@/contexts/NodeConfigContext";
+import { AlertsProvider } from "@/components/AlertsProvider";
 import NotFound from "@/pages/not-found";
 import { Layout } from "@/components/layout/Layout";
 import Dashboard from "@/pages/dashboard";
@@ -47,14 +48,16 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <NodeConfigProvider>
         <TooltipProvider>
-          {/* Background Image Layer */}
-          <div className="fixed inset-0 z-[-1] opacity-20 pointer-events-none">
-             <img src={generatedImage} alt="" className="w-full h-full object-cover" />
-             <div className="absolute inset-0 bg-background/90 mix-blend-multiply" />
-          </div>
-          
-          <Toaster />
-          <Router />
+          <AlertsProvider>
+            {/* Background Image Layer */}
+            <div className="fixed inset-0 z-[-1] opacity-20 pointer-events-none">
+               <img src={generatedImage} alt="" className="w-full h-full object-cover" />
+               <div className="absolute inset-0 bg-background/90 mix-blend-multiply" />
+            </div>
+            
+            <Toaster />
+            <Router />
+          </AlertsProvider>
         </TooltipProvider>
       </NodeConfigProvider>
     </QueryClientProvider>

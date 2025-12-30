@@ -26,22 +26,20 @@ interface MarketplaceFile {
 async function fetchMarketplaceFiles(): Promise<MarketplaceFile[]> {
   const res = await fetch("/api/files/marketplace");
   if (!res.ok) {
-    return [
-      { id: "1", fileName: "popular_video.mp4", cid: "QmX7d8f9a2b3c4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0", size: "2500000", replicaCount: 2, rarityMultiplier: 1.5, roiScore: 89, dailyEarnings: 0.0125 },
-      { id: "2", fileName: "trending_podcast.mp3", cid: "QmY8e9g0h1i2j3k4l5m6n7o8p9q0r1s2t3u4v5w6x7y8z9", size: "1800000", replicaCount: 5, rarityMultiplier: 1.0, roiScore: 72, dailyEarnings: 0.0082 },
-      { id: "3", fileName: "rare_document.pdf", cid: "QmZ9f0g1h2i3j4k5l6m7n8o9p0q1r2s3t4u5v6w7x8y9z0", size: "500000", replicaCount: 1, rarityMultiplier: 2.0, roiScore: 95, dailyEarnings: 0.0145 },
-      { id: "4", fileName: "community_backup.zip", cid: "QmA0g1h2i3j4k5l6m7n8o9p0q1r2s3t4u5v6w7x8y9z0a1", size: "3200000", replicaCount: 3, rarityMultiplier: 1.25, roiScore: 65, dailyEarnings: 0.0065 },
-      { id: "5", fileName: "legacy_archive.tar", cid: "QmB1h2i3j4k5l6m7n8o9p0q1r2s3t4u5v6w7x8y9z0a1b2", size: "4500000", replicaCount: 7, rarityMultiplier: 1.0, roiScore: 58, dailyEarnings: 0.0042 },
-      { id: "6", fileName: "exclusive_stream.mp4", cid: "QmC2i3j4k5l6m7n8o9p0q1r2s3t4u5v6w7x8y9z0a1b2c3", size: "8500000", replicaCount: 1, rarityMultiplier: 2.5, roiScore: 98, dailyEarnings: 0.0185 },
-      { id: "7", fileName: "dataset_v2.csv", cid: "QmD3j4k5l6m7n8o9p0q1r2s3t4u5v6w7x8y9z0a1b2c3d4", size: "750000", replicaCount: 2, rarityMultiplier: 1.5, roiScore: 82, dailyEarnings: 0.0098 },
-      { id: "8", fileName: "music_album.flac", cid: "QmE4k5l6m7n8o9p0q1r2s3t4u5v6w7x8y9z0a1b2c3d4e5", size: "9200000", replicaCount: 4, rarityMultiplier: 1.1, roiScore: 61, dailyEarnings: 0.0055 },
-      { id: "9", fileName: "tutorial_series.zip", cid: "QmF5l6m7n8o9p0q1r2s3t4u5v6w7x8y9z0a1b2c3d4e5f6", size: "12000000", replicaCount: 6, rarityMultiplier: 1.0, roiScore: 45, dailyEarnings: 0.0035 },
-      { id: "10", fileName: "nft_collection.json", cid: "QmG6m7n8o9p0q1r2s3t4u5v6w7x8y9z0a1b2c3d4e5f6g7", size: "125000", replicaCount: 1, rarityMultiplier: 3.0, roiScore: 99, dailyEarnings: 0.0220 },
-      { id: "11", fileName: "game_assets.pak", cid: "QmH7n8o9p0q1r2s3t4u5v6w7x8y9z0a1b2c3d4e5f6g7h8", size: "25000000", replicaCount: 3, rarityMultiplier: 1.25, roiScore: 52, dailyEarnings: 0.0048 },
-      { id: "12", fileName: "blockchain_data.db", cid: "QmI8o9p0q1r2s3t4u5v6w7x8y9z0a1b2c3d4e5f6g7h8i9", size: "5600000", replicaCount: 8, rarityMultiplier: 1.0, roiScore: 38, dailyEarnings: 0.0028 },
-    ];
+    return [];
   }
-  return res.json();
+  const data = await res.json();
+  const files = data.files || data || [];
+  return files.map((f: any) => ({
+    id: f.id,
+    fileName: f.name || f.fileName || "Unknown",
+    cid: f.cid || "",
+    size: f.size || f.sizeBytes?.toString() || "0",
+    replicaCount: f.replicationCount || f.replicaCount || 1,
+    rarityMultiplier: f.rarityMultiplier || 1,
+    roiScore: Math.round((f.roiScore || 0) * 100),
+    dailyEarnings: f.dailyEarnings || 0,
+  }));
 }
 
 function truncateCid(cid: string): string {
