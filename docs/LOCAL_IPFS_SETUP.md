@@ -1,6 +1,36 @@
 # Local IPFS Node Setup for Testing
 
-This guide helps you set up a local IPFS node on your machine to test SPK Network 2.0 integration.
+This guide helps you set up a local IPFS node to test SPK Network 2.0 integration.
+
+## One-Click Setup (Recommended)
+
+Run the bootstrap script to automatically initialize and start IPFS:
+
+```bash
+./scripts/ipfs-dev.sh
+```
+
+This script will:
+1. Create an IPFS repository at `.ipfs-data/`
+2. Configure CORS for web access
+3. Set storage limits (5GB default)
+4. Start the IPFS daemon
+
+**Ports:**
+- API: `http://localhost:5001` (for add/pin/cat operations)
+- Gateway: `http://localhost:8081` (for read-only access)
+
+**Environment Variables (auto-configured):**
+- `IPFS_API_URL=http://127.0.0.1:5001`
+- `IPFS_GATEWAY_URL=http://127.0.0.1:8081`
+
+**Test your connection:**
+```bash
+curl http://localhost:5000/api/ipfs/status
+curl -X POST http://localhost:5000/api/ipfs/test
+```
+
+---
 
 ## What SPK Network Uses
 
