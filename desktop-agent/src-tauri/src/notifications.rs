@@ -1,26 +1,24 @@
-use tauri::api::notification::Notification;
-
-const APP_IDENTIFIER: &str = "com.spknetwork.desktop";
+use notify_rust::Notification;
 
 pub const MILESTONE_THRESHOLDS: [f64; 5] = [0.01, 0.1, 1.0, 10.0, 100.0];
 
 pub fn send_challenge_notification(amount_hbd: f64) {
-    let _ = Notification::new(APP_IDENTIFIER)
-        .title("PoA Challenge Passed!")
+    let _ = Notification::new()
+        .summary("PoA Challenge Passed!")
         .body(&format!("+{:.4} HBD earned", amount_hbd))
         .show();
 }
 
 pub fn send_milestone_notification(total_earned: f64, milestone: f64) {
-    let _ = Notification::new(APP_IDENTIFIER)
-        .title("🎉 Milestone Reached!")
+    let _ = Notification::new()
+        .summary("Milestone Reached!")
         .body(&format!("Total earned: {:.2} HBD", milestone.max(total_earned)))
         .show();
 }
 
 pub fn send_daily_summary_notification(daily_earnings: f64, challenge_count: u64) {
-    let _ = Notification::new(APP_IDENTIFIER)
-        .title("Daily Earnings Summary")
+    let _ = Notification::new()
+        .summary("Daily Earnings Summary")
         .body(&format!(
             "Daily earnings: {:.4} HBD from {} challenges",
             daily_earnings, challenge_count
