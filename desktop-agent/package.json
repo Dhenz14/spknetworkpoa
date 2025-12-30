@@ -62,8 +62,11 @@
       "target": "dir"
     },
     "linux": {
-      "target": "dir",
+      "target": "AppImage",
       "category": "Utility"
+    },
+    "appImage": {
+      "artifactName": "SPK-Desktop-Agent-${version}.${ext}"
     }
   }
 }

@@ -56,6 +56,7 @@ jobs:
         working-directory: desktop-agent
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          USE_HARD_LINKS: false
         run: npm run package:${{ matrix.platform }}
 
       - name: Create archive (Linux/Mac)
@@ -63,8 +64,10 @@ jobs:
         working-directory: desktop-agent
         run: |
           cd build
-          if [ -d "linux-unpacked" ]; then
-            tar -czvf spk-desktop-linux.tar.gz linux-unpacked/
+          # Linux AppImage - already a single file, just list it
+          if ls *.AppImage 1> /dev/null 2>&1; then
+            echo "AppImage found:"
+            ls -la *.AppImage
           fi
           if [ -d "mac" ]; then
             tar -czvf spk-desktop-mac.tar.gz mac/
@@ -92,6 +95,7 @@ jobs:
           path: |
             desktop-agent/build/*.tar.gz
             desktop-agent/build/*.zip
+            desktop-agent/build/*.AppImage
           if-no-files-found: warn
 
   release:
@@ -113,6 +117,7 @@ jobs:
           mkdir -p release-files
           find artifacts -name "*.tar.gz" -exec cp {} release-files/ \;
           find artifacts -name "*.zip" -exec cp {} release-files/ \;
+          find artifacts -name "*.AppImage" -exec cp {} release-files/ \;
           echo "Release files:"
           ls -la release-files/
 
@@ -134,11 +139,9 @@ jobs:
             **Auto-updated on every push to main.**
             
             Download for your platform:
-            - **Windows**: `spk-desktop-win.zip`
-            - **macOS**: `spk-desktop-mac.tar.gz` or `spk-desktop-mac-arm64.tar.gz`
-            - **Linux**: `spk-desktop-linux.tar.gz`
-            
-            Extract and run the application.
+            - **Windows**: `spk-desktop-win.zip` - Extract and run
+            - **macOS**: `spk-desktop-mac.tar.gz` - Extract and run
+            - **Linux**: `.AppImage` file - Make executable with `chmod +x` and run
             
             Built from commit: ${{ github.sha }}
           files: release-files/*
