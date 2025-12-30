@@ -96,8 +96,22 @@ class ThreeSpeakService {
     };
   }
 
+  private extractCidFromUrl(url: string): string {
+    if (!url) return "";
+    const match = url.match(/\/ipfs\/(Qm[a-zA-Z0-9]{44}|baf[a-zA-Z0-9]{50,})/);
+    return match ? match[1] : "";
+  }
+
   private transformVideo(v: any): ThreeSpeakVideo {
-    const ipfsHash = v.video_v2 || v.ipfs || v.video?.ipfs || "";
+    let ipfsHash = v.video_v2 || v.ipfs || v.video?.ipfs || "";
+    
+    if (!ipfsHash && v.playUrl) {
+      ipfsHash = this.extractCidFromUrl(v.playUrl);
+    }
+    if (!ipfsHash && v.images?.ipfs_thumbnail) {
+      ipfsHash = this.extractCidFromUrl(v.images.ipfs_thumbnail);
+    }
+    
     return {
       id: v._id || v.permlink || `${v.author}-${v.permlink}`,
       permlink: v.permlink || "",
