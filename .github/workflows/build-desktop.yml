@@ -13,13 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux
-          - os: windows-latest
-            platform: win
-          - os: macos-latest
-            platform: mac
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     runs-on: ${{ matrix.os }}
 
@@ -48,54 +42,51 @@ jobs:
             node scripts/download-kubo.js linux-x64
           fi
 
-      - name: Build application
-        working-directory: desktop-agent
-        run: npm run build
-
-      - name: Package for ${{ matrix.platform }}
-        working-directory: desktop-agent
+      - name: Build/Release Electron app
+        uses: samuelmeuli/action-electron-builder@v1.6.0
+        with:
+          package_root: desktop-agent
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          release: false
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           USE_HARD_LINKS: false
-        run: npm run package:${{ matrix.platform }}
 
-      - name: Create archive (Linux/Mac)
-        if: runner.os != 'Windows'
+      - name: List build output
         working-directory: desktop-agent
+        shell: bash
         run: |
-          cd build
-          # Linux AppImage - already a single file, just list it
-          if ls *.AppImage 1> /dev/null 2>&1; then
-            echo "AppImage found:"
-            ls -la *.AppImage
-          fi
-          if [ -d "mac" ]; then
-            tar -czvf spk-desktop-mac.tar.gz mac/
-          fi
-          if [ -d "mac-arm64" ]; then
-            tar -czvf spk-desktop-mac-arm64.tar.gz mac-arm64/
-          fi
-          ls -la
+          echo "Build directory contents:"
+          ls -la build/ || echo "No build directory"
+          ls -la build/*/ 2>/dev/null || echo "No subdirectories"
 
-      - name: Create archive (Windows)
-        if: runner.os == 'Windows'
-        working-directory: desktop-agent
-        shell: pwsh
-        run: |
-          cd build
-          if (Test-Path "win-unpacked") {
-            Compress-Archive -Path "win-unpacked" -DestinationPath "spk-desktop-win.zip"
-          }
-          Get-ChildItem
-
-      - name: Upload artifacts
+      - name: Upload Linux artifact
+        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: spk-desktop-${{ matrix.platform }}
+          name: spk-desktop-linux
           path: |
-            desktop-agent/build/*.tar.gz
-            desktop-agent/build/*.zip
             desktop-agent/build/*.AppImage
+            desktop-agent/build/linux-unpacked/
+          if-no-files-found: warn
+
+      - name: Upload macOS artifact
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: spk-desktop-mac
+          path: |
+            desktop-agent/build/*.dmg
+            desktop-agent/build/mac*/
+          if-no-files-found: warn
+
+      - name: Upload Windows artifact
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: spk-desktop-win
+          path: |
+            desktop-agent/build/*.exe
+            desktop-agent/build/win-unpacked/
           if-no-files-found: warn
 
   release:
@@ -112,12 +103,21 @@ jobs:
         with:
           path: artifacts
 
-      - name: Flatten artifacts
+      - name: Prepare release files
         run: |
           mkdir -p release-files
-          find artifacts -name "*.tar.gz" -exec cp {} release-files/ \;
-          find artifacts -name "*.zip" -exec cp {} release-files/ \;
-          find artifacts -name "*.AppImage" -exec cp {} release-files/ \;
+          # Find and copy all distributable files
+          find artifacts -type f \( -name "*.AppImage" -o -name "*.dmg" -o -name "*.exe" \) -exec cp {} release-files/ \;
+          # Create archives for unpacked directories
+          if [ -d "artifacts/spk-desktop-win/win-unpacked" ]; then
+            cd artifacts/spk-desktop-win && zip -r ../../release-files/spk-desktop-win.zip win-unpacked/ && cd ../..
+          fi
+          if [ -d "artifacts/spk-desktop-mac/mac" ]; then
+            cd artifacts/spk-desktop-mac && tar -czvf ../../release-files/spk-desktop-mac.tar.gz mac/ && cd ../..
+          fi
+          if [ -d "artifacts/spk-desktop-linux/linux-unpacked" ]; then
+            cd artifacts/spk-desktop-linux && tar -czvf ../../release-files/spk-desktop-linux.tar.gz linux-unpacked/ && cd ../..
+          fi
           echo "Release files:"
           ls -la release-files/
 
@@ -139,9 +139,9 @@ jobs:
             **Auto-updated on every push to main.**
             
             Download for your platform:
-            - **Windows**: `spk-desktop-win.zip` - Extract and run
-            - **macOS**: `spk-desktop-mac.tar.gz` - Extract and run
-            - **Linux**: `.AppImage` file - Make executable with `chmod +x` and run
+            - **Windows**: `.exe` installer or `spk-desktop-win.zip`
+            - **macOS**: `.dmg` or `spk-desktop-mac.tar.gz`
+            - **Linux**: `.AppImage` (make executable with `chmod +x` and run)
             
             Built from commit: ${{ github.sha }}
           files: release-files/*
