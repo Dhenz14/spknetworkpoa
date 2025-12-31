@@ -653,6 +653,58 @@ export async function registerRoutes(
     res.json(files);
   });
 
+  // Get file marketplace with rarity and ROI data (must be before :cid route)
+  app.get("/api/files/marketplace", async (req, res) => {
+    const files = await storage.getAllFiles();
+    const challenges = await storage.getRecentChallenges(500);
+    
+    const filesWithROI = files.map(file => {
+      const fileChallenges = challenges.filter(c => c.fileId === file.id);
+      const passedChallenges = fileChallenges.filter(c => c.result === "success").length;
+      
+      const replicationCount = file.replicationCount || 1;
+      const rarityMultiplier = 1 / Math.max(1, replicationCount);
+      
+      const sizeBytes = parseInt(file.size) || 1000;
+      const rewardPerProof = 0.001 * rarityMultiplier;
+      const proofsPerDay = (passedChallenges / 7) || 1;
+      const dailyEarnings = rewardPerProof * proofsPerDay;
+      const roiScore = (dailyEarnings * 1000000) / sizeBytes;
+      
+      return {
+        id: file.id,
+        name: file.name,
+        cid: file.cid,
+        size: file.size,
+        sizeBytes,
+        status: file.status,
+        replicationCount,
+        rarityMultiplier,
+        isRare: replicationCount < 3,
+        earnedHbd: (file as any).earnedHbd || 0,
+        rewardPerProof,
+        dailyEarnings,
+        roiScore,
+        challengeCount: fileChallenges.length,
+        successRate: fileChallenges.length > 0 
+          ? (passedChallenges / fileChallenges.length * 100).toFixed(1)
+          : "0.0",
+      };
+    });
+    
+    filesWithROI.sort((a, b) => b.roiScore - a.roiScore);
+    
+    res.json({
+      files: filesWithROI,
+      recommendations: filesWithROI.filter(f => f.isRare).slice(0, 10),
+      stats: {
+        totalFiles: files.length,
+        rareFiles: filesWithROI.filter(f => f.isRare).length,
+        avgRarityMultiplier: filesWithROI.reduce((sum, f) => sum + f.rarityMultiplier, 0) / files.length || 0,
+      },
+    });
+  });
+
   app.get("/api/files/:cid", async (req, res) => {
     const file = await storage.getFileByCid(req.params.cid);
     if (!file) {
@@ -1045,61 +1097,6 @@ export async function registerRoutes(
     });
     
     res.json(enrichedChallenges);
-  });
-
-  // Get file marketplace with rarity and ROI data
-  app.get("/api/files/marketplace", async (req, res) => {
-    const files = await storage.getAllFiles();
-    const challenges = await storage.getRecentChallenges(500);
-    
-    const filesWithROI = files.map(file => {
-      const fileChallenges = challenges.filter(c => c.fileId === file.id);
-      const passedChallenges = fileChallenges.filter(c => c.result === "success").length;
-      
-      // Calculate rarity multiplier
-      const replicationCount = file.replicationCount || 1;
-      const rarityMultiplier = 1 / Math.max(1, replicationCount);
-      
-      // Calculate ROI score (higher = better)
-      const sizeBytes = parseInt(file.size) || 1000;
-      const rewardPerProof = 0.001 * rarityMultiplier;
-      const proofsPerDay = (passedChallenges / 7) || 1; // Estimate from 7-day data
-      const dailyEarnings = rewardPerProof * proofsPerDay;
-      const roiScore = (dailyEarnings * 1000000) / sizeBytes; // HBD per MB per day
-      
-      return {
-        id: file.id,
-        name: file.name,
-        cid: file.cid,
-        size: file.size,
-        sizeBytes,
-        status: file.status,
-        replicationCount,
-        rarityMultiplier,
-        isRare: replicationCount < 3,
-        earnedHbd: (file as any).earnedHbd || 0,
-        rewardPerProof,
-        dailyEarnings,
-        roiScore,
-        challengeCount: fileChallenges.length,
-        successRate: fileChallenges.length > 0 
-          ? (passedChallenges / fileChallenges.length * 100).toFixed(1)
-          : "0.0",
-      };
-    });
-    
-    // Sort by ROI score descending
-    filesWithROI.sort((a, b) => b.roiScore - a.roiScore);
-    
-    res.json({
-      files: filesWithROI,
-      recommendations: filesWithROI.filter(f => f.isRare).slice(0, 10),
-      stats: {
-        totalFiles: files.length,
-        rareFiles: filesWithROI.filter(f => f.isRare).length,
-        avgRarityMultiplier: filesWithROI.reduce((sum, f) => sum + f.rarityMultiplier, 0) / files.length || 0,
-      },
-    });
   });
 
   // Get performance analytics

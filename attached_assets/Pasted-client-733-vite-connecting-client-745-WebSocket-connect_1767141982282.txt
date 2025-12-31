@@ -1,0 +1,114 @@
+client:733 [vite] connecting...
+client:745 WebSocket connection to 'wss://db88b08f-2990-4d58-a782-930319b7a590-00-235iopzr5fj4n.spock.replit.dev/vite-hmr?token=JSgtaFvKotwg' failed: 
+createConnection @ client:745
+client:755 WebSocket connection to 'wss://localhost:5173/?token=JSgtaFvKotwg' failed: 
+createConnection @ client:755
+client:765 [vite] failed to connect to websocket.
+your current setup:
+  (browser) db88b08f-2990-4d58-a782-930319b7a590-00-235iopzr5fj4n.spock.replit.dev/ <--[HTTP]--> localhost:5173/ (server)
+  (browser) db88b08f-2990-4d58-a782-930319b7a590-00-235iopzr5fj4n.spock.replit.dev:/vite-hmr <--[WebSocket (failing)]--> localhost:5173/ (server)
+Check out your Vite / network configuration and https://vite.dev/config/server-options.html#server-hmr .
+connect @ client:765
+react-dom_client.js?v=31f4691a:20103 Download the React DevTools for a better development experience: https://react.dev/link/react-devtools
+helia-client.ts:55 [Helia] Initializing browser IPFS node...
+blakejs-browser.js:243 ✅ blakejs loaded successfully (self-contained version)
+blakejs-browser.js:244   Available functions: Array(5)
+paywall-detector.js:318 🛡️ Paywall Detector loaded - 100% client-side, no external dependencies
+content.js:13 🏛️ ArcHive Content Script Loaded
+content.js:434 🏛️ ArcHive Content Script Ready - 100% Decentralized
+helia-client.ts:71 [Helia] Browser node ready! PeerId: 12D3KooWNSj36BApxMczGkdZCmTrhtMfHJ8eSej4pFThNjxKe1GC
+helia.js?v=31f4691a:65367 WebSocket connection to 'wss://va1.bootstrap.libp2p.io/' failed: 
+_connect @ helia.js?v=31f4691a:65367
+helia.js?v=31f4691a:65367 WebSocket connection to 'wss://va1.bootstrap.libp2p.io/' failed: 
+_connect @ helia.js?v=31f4691a:65367
+helia.js?v=31f4691a:65367 WebSocket connection to 'wss://ipfs-ws.neaweb.ch/' failed: 
+_connect @ helia.js?v=31f4691a:65367
+dial @ helia.js?v=31f4691a:65350
+dial @ helia.js?v=31f4691a:19971
+dialPeer @ helia.js?v=31f4691a:18362
+earnings.tsx:132  GET https://db88b08f-2990-4d58-a782-930319b7a590-00-235iopzr5fj4n.spock.replit.dev/api/files/marketplace 404 (Not Found)
+fetchFileEarnings @ earnings.tsx:132
+fetchFn @ @tanstack_react-query.js?v=31f4691a:812
+run @ @tanstack_react-query.js?v=31f4691a:477
+start @ @tanstack_react-query.js?v=31f4691a:518
+fetch @ @tanstack_react-query.js?v=31f4691a:893
+#executeFetch @ @tanstack_react-query.js?v=31f4691a:1963
+onSubscribe @ @tanstack_react-query.js?v=31f4691a:1840
+subscribe @ @tanstack_react-query.js?v=31f4691a:19
+(anonymous) @ @tanstack_react-query.js?v=31f4691a:2962
+subscribeToStore @ react-dom_client.js?v=31f4691a:6089
+react_stack_bottom_frame @ react-dom_client.js?v=31f4691a:18567
+runWithFiberInDEV @ react-dom_client.js?v=31f4691a:997
+commitHookEffectListMount @ react-dom_client.js?v=31f4691a:9411
+commitHookPassiveMountEffects @ react-dom_client.js?v=31f4691a:9465
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11040
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11201
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11033
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11033
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11201
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11201
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11033
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11033
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11033
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11201
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11033
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11033
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11201
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11033
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11201
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11033
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11201
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11033
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11033
+recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=31f4691a:11010
+commitPassiveMountOnFiber @ react-dom_client.js?v=31f4691a:11066
+flushPassiveEffects @ react-dom_client.js?v=31f4691a:13150
+flushPendingEffects @ react-dom_client.js?v=31f4691a:13088
+flushSpawnedWork @ react-dom_client.js?v=31f4691a:13062
+commitRoot @ react-dom_client.js?v=31f4691a:12804
+commitRootWhenReady @ react-dom_client.js?v=31f4691a:12016
+performWorkOnRoot @ react-dom_client.js?v=31f4691a:11950
+performSyncWorkOnRoot @ react-dom_client.js?v=31f4691a:13517
+flushSyncWorkAcrossRoots_impl @ react-dom_client.js?v=31f4691a:13414
+processRootScheduleInMicrotask @ react-dom_client.js?v=31f4691a:13437
+(anonymous) @ react-dom_client.js?v=31f4691a:13531
+<Earnings>
+exports.createElement @ chunk-KMU3Z7QX.js?v=31f4691a:793
+h_route @ wouter.js?v=31f4691a:181
+Route @ wouter.js?v=31f4691a:200
+react_stack_bottom_frame @ react-dom_client.js?v=31f4691a:18509
+renderWithHooks @ react-dom_client.js?v=31f4691a:5654
+updateFunctionComponent @ react-dom_client.js?v=31f4691a:7475
+beginWork @ react-dom_client.js?v=31f4691a:8525
+runWithFiberInDEV @ react-dom_client.js?v=31f4691a:997
+performUnitOfWork @ react-dom_client.js?v=31f4691a:12561
+workLoopSync @ react-dom_client.js?v=31f4691a:12424
+renderRootSync @ react-dom_client.js?v=31f4691a:12408
+performWorkOnRoot @ react-dom_client.js?v=31f4691a:11766
+performSyncWorkOnRoot @ react-dom_client.js?v=31f4691a:13517
+flushSyncWorkAcrossRoots_impl @ react-dom_client.js?v=31f4691a:13414
+processRootScheduleInMicrotask @ react-dom_client.js?v=31f4691a:13437
+(anonymous) @ react-dom_client.js?v=31f4691a:13531
+helia.js?v=31f4691a:65367 WebSocket connection to 'wss://ipfs-ws.neaweb.tech/' failed: 
+_connect @ helia.js?v=31f4691a:65367
+dial @ helia.js?v=31f4691a:65350
+dial @ helia.js?v=31f4691a:19971
+dialPeer @ helia.js?v=31f4691a:18362
