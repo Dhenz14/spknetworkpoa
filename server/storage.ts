@@ -32,6 +32,11 @@ import {
   walletDeposits,
   payoutReports,
   payoutLineItems,
+  // Phase 6: P2P CDN
+  p2pSessions,
+  p2pContributions,
+  p2pRooms,
+  p2pNetworkStats,
   type StorageNode,
   type InsertStorageNode,
   type File,
@@ -86,6 +91,15 @@ import {
   type InsertPayoutReport,
   type PayoutLineItem,
   type InsertPayoutLineItem,
+  // Phase 6: P2P CDN Types
+  type P2pSession,
+  type InsertP2pSession,
+  type P2pContribution,
+  type InsertP2pContribution,
+  type P2pRoom,
+  type InsertP2pRoom,
+  type P2pNetworkStats,
+  type InsertP2pNetworkStats,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, ilike, or, notInArray, gte, lte, lt } from "drizzle-orm";
@@ -257,6 +271,33 @@ export interface IStorage {
   getPayoutLineItems(reportId: string): Promise<PayoutLineItem[]>;
   markLineItemPaid(id: string, txHash: string): Promise<void>;
   getPoaDataForPayout(startDate: Date, endDate: Date): Promise<{ username: string; proofCount: number; successRate: number; totalHbd: string }[]>;
+
+  // Phase 6: P2P Sessions
+  createP2pSession(session: InsertP2pSession): Promise<P2pSession>;
+  getP2pSession(id: string): Promise<P2pSession | undefined>;
+  getP2pSessionByPeerId(peerId: string): Promise<P2pSession | undefined>;
+  getActiveP2pSessions(roomId?: string): Promise<P2pSession[]>;
+  updateP2pSessionStats(id: string, bytesUploaded: number, bytesDownloaded: number, segmentsShared: number, peersConnected: number): Promise<void>;
+  disconnectP2pSession(id: string): Promise<void>;
+  cleanupStaleSessions(): Promise<number>;
+
+  // Phase 6: P2P Contributions
+  createP2pContribution(contribution: InsertP2pContribution): Promise<P2pContribution>;
+  getP2pContributionsByPeerId(peerId: string): Promise<P2pContribution[]>;
+  getP2pContributionsByUsername(hiveUsername: string): Promise<P2pContribution[]>;
+  getTopContributors(limit: number): Promise<{ hiveUsername: string; totalBytesShared: number; totalSegments: number }[]>;
+
+  // Phase 6: P2P Rooms
+  getOrCreateP2pRoom(videoCid: string): Promise<P2pRoom>;
+  getP2pRoom(id: string): Promise<P2pRoom | undefined>;
+  getP2pRoomByCid(videoCid: string): Promise<P2pRoom | undefined>;
+  updateP2pRoomStats(id: string, activePeers: number, bytesShared: number): Promise<void>;
+  getActiveP2pRooms(): Promise<P2pRoom[]>;
+
+  // Phase 6: P2P Network Stats
+  createP2pNetworkStats(stats: InsertP2pNetworkStats): Promise<P2pNetworkStats>;
+  getP2pNetworkStats(limit: number): Promise<P2pNetworkStats[]>;
+  getCurrentP2pNetworkStats(): Promise<{ activePeers: number; activeRooms: number; totalBytesShared: number; avgP2pRatio: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1120,6 +1161,184 @@ export class DatabaseStorage implements IStorage {
       successRate: r.totalCount > 0 ? (r.successCount / r.totalCount) * 100 : 0,
       totalHbd: (r.successCount * HBD_PER_PROOF).toFixed(3)
     }));
+  }
+
+  // ============================================================
+  // Phase 6: P2P Sessions
+  // ============================================================
+  async createP2pSession(session: InsertP2pSession): Promise<P2pSession> {
+    const [created] = await db.insert(p2pSessions).values(session).returning();
+    return created;
+  }
+
+  async getP2pSession(id: string): Promise<P2pSession | undefined> {
+    const [session] = await db.select().from(p2pSessions).where(eq(p2pSessions.id, id));
+    return session || undefined;
+  }
+
+  async getP2pSessionByPeerId(peerId: string): Promise<P2pSession | undefined> {
+    const [session] = await db.select().from(p2pSessions)
+      .where(and(eq(p2pSessions.peerId, peerId), eq(p2pSessions.status, 'active')));
+    return session || undefined;
+  }
+
+  async getActiveP2pSessions(roomId?: string): Promise<P2pSession[]> {
+    if (roomId) {
+      return await db.select().from(p2pSessions)
+        .where(and(eq(p2pSessions.roomId, roomId), eq(p2pSessions.status, 'active')));
+    }
+    return await db.select().from(p2pSessions)
+      .where(eq(p2pSessions.status, 'active'));
+  }
+
+  async updateP2pSessionStats(
+    id: string, 
+    bytesUploaded: number, 
+    bytesDownloaded: number, 
+    segmentsShared: number, 
+    peersConnected: number
+  ): Promise<void> {
+    await db.update(p2pSessions)
+      .set({ 
+        bytesUploaded, 
+        bytesDownloaded, 
+        segmentsShared, 
+        peersConnected,
+        lastActiveAt: new Date()
+      })
+      .where(eq(p2pSessions.id, id));
+  }
+
+  async disconnectP2pSession(id: string): Promise<void> {
+    await db.update(p2pSessions)
+      .set({ status: 'disconnected', disconnectedAt: new Date() })
+      .where(eq(p2pSessions.id, id));
+  }
+
+  async cleanupStaleSessions(): Promise<number> {
+    const staleThreshold = new Date(Date.now() - 5 * 60 * 1000); // 5 minutes
+    const result = await db.update(p2pSessions)
+      .set({ status: 'disconnected', disconnectedAt: new Date() })
+      .where(and(
+        eq(p2pSessions.status, 'active'),
+        lt(p2pSessions.lastActiveAt, staleThreshold)
+      ));
+    return 0; // Drizzle doesn't return affected count easily
+  }
+
+  // ============================================================
+  // Phase 6: P2P Contributions
+  // ============================================================
+  async createP2pContribution(contribution: InsertP2pContribution): Promise<P2pContribution> {
+    const [created] = await db.insert(p2pContributions).values(contribution).returning();
+    return created;
+  }
+
+  async getP2pContributionsByPeerId(peerId: string): Promise<P2pContribution[]> {
+    return await db.select().from(p2pContributions)
+      .where(eq(p2pContributions.peerId, peerId))
+      .orderBy(desc(p2pContributions.createdAt));
+  }
+
+  async getP2pContributionsByUsername(hiveUsername: string): Promise<P2pContribution[]> {
+    return await db.select().from(p2pContributions)
+      .where(eq(p2pContributions.hiveUsername, hiveUsername))
+      .orderBy(desc(p2pContributions.createdAt));
+  }
+
+  async getTopContributors(limit: number): Promise<{ hiveUsername: string; totalBytesShared: number; totalSegments: number }[]> {
+    const results = await db.select({
+      hiveUsername: p2pContributions.hiveUsername,
+      totalBytesShared: sql<number>`SUM(${p2pContributions.bytesShared})::INTEGER`,
+      totalSegments: sql<number>`SUM(${p2pContributions.segmentsShared})::INTEGER`,
+    })
+    .from(p2pContributions)
+    .where(sql`${p2pContributions.hiveUsername} IS NOT NULL`)
+    .groupBy(p2pContributions.hiveUsername)
+    .orderBy(desc(sql`SUM(${p2pContributions.bytesShared})`))
+    .limit(limit);
+
+    return results.map(r => ({
+      hiveUsername: r.hiveUsername || '',
+      totalBytesShared: r.totalBytesShared || 0,
+      totalSegments: r.totalSegments || 0,
+    }));
+  }
+
+  // ============================================================
+  // Phase 6: P2P Rooms
+  // ============================================================
+  async getOrCreateP2pRoom(videoCid: string): Promise<P2pRoom> {
+    const existing = await this.getP2pRoomByCid(videoCid);
+    if (existing) return existing;
+
+    const [created] = await db.insert(p2pRooms)
+      .values({ videoCid, activePeers: 0, totalBytesShared: 0 })
+      .returning();
+    return created;
+  }
+
+  async getP2pRoom(id: string): Promise<P2pRoom | undefined> {
+    const [room] = await db.select().from(p2pRooms).where(eq(p2pRooms.id, id));
+    return room || undefined;
+  }
+
+  async getP2pRoomByCid(videoCid: string): Promise<P2pRoom | undefined> {
+    const [room] = await db.select().from(p2pRooms).where(eq(p2pRooms.videoCid, videoCid));
+    return room || undefined;
+  }
+
+  async updateP2pRoomStats(id: string, activePeers: number, bytesShared: number): Promise<void> {
+    await db.update(p2pRooms)
+      .set({ 
+        activePeers, 
+        totalBytesShared: sql`${p2pRooms.totalBytesShared} + ${bytesShared}`,
+        lastActivityAt: new Date()
+      })
+      .where(eq(p2pRooms.id, id));
+  }
+
+  async getActiveP2pRooms(): Promise<P2pRoom[]> {
+    return await db.select().from(p2pRooms)
+      .where(sql`${p2pRooms.activePeers} > 0`)
+      .orderBy(desc(p2pRooms.activePeers));
+  }
+
+  // ============================================================
+  // Phase 6: P2P Network Stats
+  // ============================================================
+  async createP2pNetworkStats(stats: InsertP2pNetworkStats): Promise<P2pNetworkStats> {
+    const [created] = await db.insert(p2pNetworkStats).values(stats).returning();
+    return created;
+  }
+
+  async getP2pNetworkStats(limit: number): Promise<P2pNetworkStats[]> {
+    return await db.select().from(p2pNetworkStats)
+      .orderBy(desc(p2pNetworkStats.timestamp))
+      .limit(limit);
+  }
+
+  async getCurrentP2pNetworkStats(): Promise<{ activePeers: number; activeRooms: number; totalBytesShared: number; avgP2pRatio: number }> {
+    const activeSessions = await db.select({ count: sql<number>`COUNT(*)::INTEGER` })
+      .from(p2pSessions)
+      .where(eq(p2pSessions.status, 'active'));
+
+    const activeRooms = await db.select({ count: sql<number>`COUNT(*)::INTEGER` })
+      .from(p2pRooms)
+      .where(sql`${p2pRooms.activePeers} > 0`);
+
+    const totalShared = await db.select({ sum: sql<number>`COALESCE(SUM(${p2pContributions.bytesShared}), 0)::INTEGER` })
+      .from(p2pContributions);
+
+    const avgRatio = await db.select({ avg: sql<number>`COALESCE(AVG(${p2pContributions.p2pRatio}), 0)::REAL` })
+      .from(p2pContributions);
+
+    return {
+      activePeers: activeSessions[0]?.count || 0,
+      activeRooms: activeRooms[0]?.count || 0,
+      totalBytesShared: totalShared[0]?.sum || 0,
+      avgP2pRatio: avgRatio[0]?.avg || 0,
+    };
   }
 }
 
