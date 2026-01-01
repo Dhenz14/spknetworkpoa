@@ -347,6 +347,49 @@ export const payoutHistory = pgTable("payout_history", {
 });
 
 // ============================================================
+// PHASE 5: Payout System
+// ============================================================
+
+// Wallet Deposits - Track incoming HBD to the central wallet
+export const walletDeposits = pgTable("wallet_deposits", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fromUsername: text("from_username").notNull(),
+  hbdAmount: text("hbd_amount").notNull(),
+  memo: text("memo"),
+  txHash: text("tx_hash").notNull().unique(),
+  purpose: text("purpose").notNull().default("storage"), // storage, tip, other
+  processed: boolean("processed").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Payout Reports - Validator-generated reports for batch payouts
+export const payoutReports = pgTable("payout_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  validatorUsername: text("validator_username").notNull(),
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  totalHbd: text("total_hbd").notNull(),
+  recipientCount: integer("recipient_count").notNull(),
+  status: text("status").notNull().default("pending"), // pending, approved, executed, rejected
+  executedAt: timestamp("executed_at"),
+  executedTxHash: text("executed_tx_hash"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Payout Line Items - Individual payout entries in a report
+export const payoutLineItems = pgTable("payout_line_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportId: varchar("report_id").notNull().references(() => payoutReports.id),
+  recipientUsername: text("recipient_username").notNull(),
+  hbdAmount: text("hbd_amount").notNull(),
+  proofCount: integer("proof_count").notNull(),
+  successRate: real("success_rate").notNull(),
+  paid: boolean("paid").notNull().default(false),
+  txHash: text("tx_hash"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ============================================================
 // Insert Schemas
 // ============================================================
 
@@ -468,6 +511,22 @@ export const insertPayoutHistorySchema = createInsertSchema(payoutHistory).omit(
   createdAt: true,
 });
 
+// Phase 5: Payout System
+export const insertWalletDepositSchema = createInsertSchema(walletDeposits).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPayoutReportSchema = createInsertSchema(payoutReports).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPayoutLineItemSchema = createInsertSchema(payoutLineItems).omit({
+  id: true,
+  createdAt: true,
+});
+
 // ============================================================
 // Types
 // ============================================================
@@ -547,3 +606,13 @@ export type InsertBeneficiaryAllocation = z.infer<typeof insertBeneficiaryAlloca
 
 export type PayoutHistory = typeof payoutHistory.$inferSelect;
 export type InsertPayoutHistory = z.infer<typeof insertPayoutHistorySchema>;
+
+// Phase 5: Payout System Types
+export type WalletDeposit = typeof walletDeposits.$inferSelect;
+export type InsertWalletDeposit = z.infer<typeof insertWalletDepositSchema>;
+
+export type PayoutReport = typeof payoutReports.$inferSelect;
+export type InsertPayoutReport = z.infer<typeof insertPayoutReportSchema>;
+
+export type PayoutLineItem = typeof payoutLineItems.$inferSelect;
+export type InsertPayoutLineItem = z.infer<typeof insertPayoutLineItemSchema>;
