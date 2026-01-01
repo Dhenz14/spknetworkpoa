@@ -21,8 +21,8 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
-  // WebSocket for real-time updates
-  const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+  // WebSocket for real-time updates (using noServer mode for proper multi-path support)
+  const wss = new WebSocketServer({ noServer: true });
   
   wss.on("connection", (ws) => {
     console.log("[WebSocket] Client connected");
@@ -43,9 +43,26 @@ export async function registerRoutes(
     });
   });
 
-  // P2P CDN WebSocket for peer signaling (Phase 6)
-  const p2pWss = new WebSocketServer({ server: httpServer, path: "/p2p" });
+  // P2P CDN WebSocket for peer signaling (using noServer mode)
+  const p2pWss = new WebSocketServer({ noServer: true });
   p2pSignaling.init(p2pWss);
+
+  // Handle WebSocket upgrades manually for multiple paths
+  httpServer.on("upgrade", (request, socket, head) => {
+    const pathname = new URL(request.url || "", `http://${request.headers.host}`).pathname;
+
+    if (pathname === "/ws") {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit("connection", ws, request);
+      });
+    } else if (pathname === "/p2p") {
+      p2pWss.handleUpgrade(request, socket, head, (ws) => {
+        p2pWss.emit("connection", ws, request);
+      });
+    } else {
+      socket.destroy();
+    }
+  });
 
   // Start background services
   hiveSimulator.start();
