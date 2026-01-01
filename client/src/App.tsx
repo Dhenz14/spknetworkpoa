@@ -25,6 +25,8 @@ import ValidatorDashboard from "@/pages/validator-dashboard";
 import NodeMonitoring from "@/pages/node-monitoring";
 import ChallengeQueue from "@/pages/challenge-queue";
 import FraudDetection from "@/pages/fraud-detection";
+import PayoutGenerator from "@/pages/payout-generator";
+import WalletDashboard from "@/pages/wallet-dashboard";
 import generatedImage from '@assets/generated_images/a_dark,_futuristic_abstract_mesh_background_with_red_accents..png';
 
 function ProtectedValidatorRoute({ component: Component }: { component: React.ComponentType }) {
@@ -72,6 +74,10 @@ function Router() {
         <Route path="/fraud-detection">
           {() => <ProtectedValidatorRoute component={FraudDetection} />}
         </Route>
+        <Route path="/payout-generator">
+          {() => <ProtectedValidatorRoute component={PayoutGenerator} />}
+        </Route>
+        <Route path="/wallet-dashboard" component={WalletDashboard} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
