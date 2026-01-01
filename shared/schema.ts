@@ -528,6 +528,88 @@ export const insertPayoutLineItemSchema = createInsertSchema(payoutLineItems).om
 });
 
 // ============================================================
+// PHASE 6: P2P CDN - Viewer-Contributed Resources
+// ============================================================
+
+// P2P Sessions - Active viewer connections in P2P mesh
+export const p2pSessions = pgTable("p2p_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  peerId: text("peer_id").notNull(),
+  videoCid: text("video_cid").notNull(),
+  roomId: text("room_id").notNull(),
+  hiveUsername: text("hive_username"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  geoRegion: text("geo_region"),
+  geoCountry: text("geo_country"),
+  bytesUploaded: integer("bytes_uploaded").notNull().default(0),
+  bytesDownloaded: integer("bytes_downloaded").notNull().default(0),
+  segmentsShared: integer("segments_shared").notNull().default(0),
+  peersConnected: integer("peers_connected").notNull().default(0),
+  status: text("status").notNull().default("active"),
+  joinedAt: timestamp("joined_at").notNull().defaultNow(),
+  lastActiveAt: timestamp("last_active_at").notNull().defaultNow(),
+  disconnectedAt: timestamp("disconnected_at"),
+});
+
+// P2P Contributions - Aggregated bandwidth contributions for rewards
+export const p2pContributions = pgTable("p2p_contributions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  peerId: text("peer_id").notNull(),
+  hiveUsername: text("hive_username"),
+  videoCid: text("video_cid").notNull(),
+  bytesShared: integer("bytes_shared").notNull().default(0),
+  segmentsShared: integer("segments_shared").notNull().default(0),
+  sessionDurationSec: integer("session_duration_sec").notNull().default(0),
+  p2pRatio: real("p2p_ratio").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// P2P Rooms - Video rooms for peer coordination
+export const p2pRooms = pgTable("p2p_rooms", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  videoCid: text("video_cid").notNull().unique(),
+  activePeers: integer("active_peers").notNull().default(0),
+  totalBytesShared: integer("total_bytes_shared").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  lastActivityAt: timestamp("last_activity_at").notNull().defaultNow(),
+});
+
+// P2P Network Stats - Aggregate network statistics
+export const p2pNetworkStats = pgTable("p2p_network_stats", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+  activePeers: integer("active_peers").notNull().default(0),
+  activeRooms: integer("active_rooms").notNull().default(0),
+  totalBytesShared: integer("total_bytes_shared").notNull().default(0),
+  avgP2pRatio: real("avg_p2p_ratio").notNull().default(0),
+  bandwidthSavedBytes: integer("bandwidth_saved_bytes").notNull().default(0),
+});
+
+// Phase 6: P2P CDN Insert Schemas
+export const insertP2pSessionSchema = createInsertSchema(p2pSessions).omit({
+  id: true,
+  joinedAt: true,
+  lastActiveAt: true,
+});
+
+export const insertP2pContributionSchema = createInsertSchema(p2pContributions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertP2pRoomSchema = createInsertSchema(p2pRooms).omit({
+  id: true,
+  createdAt: true,
+  lastActivityAt: true,
+});
+
+export const insertP2pNetworkStatsSchema = createInsertSchema(p2pNetworkStats).omit({
+  id: true,
+  timestamp: true,
+});
+
+// ============================================================
 // Types
 // ============================================================
 
@@ -616,3 +698,16 @@ export type InsertPayoutReport = z.infer<typeof insertPayoutReportSchema>;
 
 export type PayoutLineItem = typeof payoutLineItems.$inferSelect;
 export type InsertPayoutLineItem = z.infer<typeof insertPayoutLineItemSchema>;
+
+// Phase 6: P2P CDN Types
+export type P2pSession = typeof p2pSessions.$inferSelect;
+export type InsertP2pSession = z.infer<typeof insertP2pSessionSchema>;
+
+export type P2pContribution = typeof p2pContributions.$inferSelect;
+export type InsertP2pContribution = z.infer<typeof insertP2pContributionSchema>;
+
+export type P2pRoom = typeof p2pRooms.$inferSelect;
+export type InsertP2pRoom = z.infer<typeof insertP2pRoomSchema>;
+
+export type P2pNetworkStats = typeof p2pNetworkStats.$inferSelect;
+export type InsertP2pNetworkStats = z.infer<typeof insertP2pNetworkStatsSchema>;
