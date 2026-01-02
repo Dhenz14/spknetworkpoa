@@ -278,6 +278,7 @@ export class MockHiveClient {
     return [
       "blocktrades", "gtg", "good-karma", "ausbitbank", "roelandp",
       "themarkymark", "steempress", "anyx", "pharesim", "someguy123",
+      "dandandan123", // Test validator account
     ].slice(0, limit);
   }
 
