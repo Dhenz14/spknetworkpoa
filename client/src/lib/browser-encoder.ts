@@ -10,12 +10,15 @@ export interface EncodingResult {
   outputArrayBuffer?: ArrayBuffer;
   duration?: number;
   error?: string;
+  format?: 'h264-raw' | 'mp4';
+  limitations?: string[];
 }
 
 export interface VideoEligibility {
   eligible: boolean;
   reason?: string;
   duration?: number;
+  warning?: string;
 }
 
 type ProgressCallback = (progress: EncodingProgress) => void;
@@ -116,7 +119,11 @@ export class BrowserEncoder {
         };
       }
 
-      return { eligible: true, duration };
+      return { 
+        eligible: true, 
+        duration,
+        warning: 'Browser encoding produces video-only output (no audio). For full audio+video encoding, use the desktop agent or community encoders.'
+      };
     } catch (err) {
       return {
         eligible: false,
@@ -258,6 +265,14 @@ export class BrowserEncoder {
                 outputBlob,
                 outputArrayBuffer: outputBuffer,
                 duration: event.data.duration,
+                format: 'h264-raw',
+                limitations: [
+                  'Video-only output (no audio)',
+                  'Raw H.264 bitstream (not MP4/HLS)',
+                  'Single quality (480p only)',
+                  'Suitable for preview/thumbnail generation',
+                  'For production encoding, use desktop agent or community encoders'
+                ],
               });
               break;
             }

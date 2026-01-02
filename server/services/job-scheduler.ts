@@ -47,14 +47,8 @@ export class JobScheduler {
         ["community", "auto"];
 
     for (const mode of priorityOrder) {
-      const [job] = await db.update(encodingJobs)
-        .set({
-          status: "assigned",
-          assignedEncoderId: encoderId,
-          assignedAt: now,
-          leaseExpiresAt: leaseExpires,
-          encoderType,
-        })
+      const candidates = await db.select({ id: encodingJobs.id })
+        .from(encodingJobs)
         .where(and(
           eq(encodingJobs.status, "queued"),
           or(
@@ -66,6 +60,23 @@ export class JobScheduler {
             lte(encodingJobs.nextRetryAt, now)
           ),
           encoderType === "browser" ? eq(encodingJobs.isShort, true) : sql`1=1`
+        ))
+        .orderBy(desc(encodingJobs.priority), asc(encodingJobs.createdAt))
+        .limit(1);
+
+      if (candidates.length === 0) continue;
+
+      const [job] = await db.update(encodingJobs)
+        .set({
+          status: "assigned",
+          assignedEncoderId: encoderId,
+          assignedAt: now,
+          leaseExpiresAt: leaseExpires,
+          encoderType,
+        })
+        .where(and(
+          eq(encodingJobs.id, candidates[0].id),
+          eq(encodingJobs.status, "queued")
         ))
         .returning();
 
