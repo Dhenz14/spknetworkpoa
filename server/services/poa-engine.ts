@@ -33,15 +33,23 @@ export const POA_CONFIG = {
   
   // Cooldown - prevents re-challenging same node+file combo too quickly
   BAN_COOLDOWN_HOURS: 24,
-  NODE_FILE_COOLDOWN_MS: 60 * 60 * 1000,  // 1 hour cooldown per node+file combination
-  NODE_COOLDOWN_MS: 5 * 60 * 1000,        // 5 minute cooldown per node (any file)
+  NODE_FILE_COOLDOWN_MS: 4 * 60 * 60 * 1000,  // 4 hour cooldown per node+file combination
+  NODE_COOLDOWN_MS: 30 * 60 * 1000,           // 30 minute cooldown per node (any file)
+  
+  // Trust-based cooldown multipliers
+  // High reputation nodes need less frequent validation
+  TRUST_TIER_NEW: 50,        // Reputation < 50 = new node, check more often
+  TRUST_TIER_ESTABLISHED: 75, // Reputation >= 75 = established, check less often
+  COOLDOWN_MULTIPLIER_NEW: 0.5,        // New nodes: half cooldown (more frequent)
+  COOLDOWN_MULTIPLIER_ESTABLISHED: 2,  // Established nodes: double cooldown (less frequent)
   
   // Challenge batching
   CHALLENGES_PER_ROUND: 3,
   
-  // Default challenge interval (can be overridden)
-  // SPK uses time-based validation, we use 2-5 minute intervals for demo purposes
-  DEFAULT_CHALLENGE_INTERVAL_MS: 2 * 60 * 1000, // 2 minutes (was 5 seconds)
+  // Default challenge interval
+  // For production: 30-60 minutes. For demo: 10 minutes
+  // SPK uses monthly cycles with time-based rewards
+  DEFAULT_CHALLENGE_INTERVAL_MS: 10 * 60 * 1000, // 10 minutes (production should be 30-60 min)
   
   // Cache
   BLOCK_CACHE_TTL_MS: 3600000, // 1 hour
@@ -266,19 +274,35 @@ export class PoAEngine {
     return files[files.length - 1];
   }
 
+  // Get cooldown multiplier based on node reputation (trust level)
+  private getCooldownMultiplier(reputation: number): number {
+    if (reputation < POA_CONFIG.TRUST_TIER_NEW) {
+      // New/low-rep nodes: shorter cooldown = more frequent checks
+      return POA_CONFIG.COOLDOWN_MULTIPLIER_NEW;
+    } else if (reputation >= POA_CONFIG.TRUST_TIER_ESTABLISHED) {
+      // Established nodes: longer cooldown = less frequent checks
+      return POA_CONFIG.COOLDOWN_MULTIPLIER_ESTABLISHED;
+    }
+    // Middle tier: standard cooldown
+    return 1;
+  }
+
   // Check if a node is on cooldown (recently challenged)
-  private isNodeOnCooldown(nodeId: string): boolean {
+  // Takes reputation into account - trusted nodes have longer cooldowns
+  private isNodeOnCooldown(nodeId: string, reputation: number = 50): boolean {
     const lastChallenge = this.nodeCooldowns.get(nodeId);
     if (!lastChallenge) return false;
-    return Date.now() - lastChallenge < POA_CONFIG.NODE_COOLDOWN_MS;
+    const cooldownMs = POA_CONFIG.NODE_COOLDOWN_MS * this.getCooldownMultiplier(reputation);
+    return Date.now() - lastChallenge < cooldownMs;
   }
 
   // Check if a specific node+file combo is on cooldown
-  private isNodeFileComboCooldown(nodeId: string, fileId: string): boolean {
+  private isNodeFileComboCooldown(nodeId: string, fileId: string, reputation: number = 50): boolean {
     const key = `${nodeId}:${fileId}`;
     const lastChallenge = this.nodeFileCooldowns.get(key);
     if (!lastChallenge) return false;
-    return Date.now() - lastChallenge < POA_CONFIG.NODE_FILE_COOLDOWN_MS;
+    const cooldownMs = POA_CONFIG.NODE_FILE_COOLDOWN_MS * this.getCooldownMultiplier(reputation);
+    return Date.now() - lastChallenge < cooldownMs;
   }
 
   // Record that a challenge was issued (update cooldowns)
@@ -302,9 +326,9 @@ export class PoAEngine {
     }
   }
 
-  // Filter nodes that are not on cooldown
+  // Filter nodes that are not on cooldown (reputation-aware)
   private filterCooldownNodes(nodes: any[]): any[] {
-    return nodes.filter(node => !this.isNodeOnCooldown(node.id));
+    return nodes.filter(node => !this.isNodeOnCooldown(node.id, node.reputation));
   }
 
   private async runChallenge() {
@@ -345,7 +369,7 @@ export class PoAEngine {
       // Find a file that hasn't been challenged with this node recently
       let selectedFile = this.selectWeightedFile(files);
       let attempts = 0;
-      while (this.isNodeFileComboCooldown(selectedNode.id, selectedFile.id) && attempts < 5) {
+      while (this.isNodeFileComboCooldown(selectedNode.id, selectedFile.id, selectedNode.reputation) && attempts < 5) {
         selectedFile = this.selectWeightedFile(files);
         attempts++;
       }
