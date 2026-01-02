@@ -33,8 +33,8 @@ export const POA_CONFIG = {
   
   // Cooldown - prevents re-challenging same node+file combo too quickly
   BAN_COOLDOWN_HOURS: 24,
-  NODE_FILE_COOLDOWN_MS: 4 * 60 * 60 * 1000,  // 4 hour cooldown per node+file combination
-  NODE_COOLDOWN_MS: 30 * 60 * 1000,           // 30 minute cooldown per node (any file)
+  NODE_FILE_COOLDOWN_MS: 60 * 1000,  // 1 minute cooldown for testing (production: 4 hours)
+  NODE_COOLDOWN_MS: 30 * 1000,       // 30 second cooldown for testing (production: 30 min)
   
   // Trust-based cooldown multipliers
   // High reputation nodes need less frequent validation
@@ -49,7 +49,7 @@ export const POA_CONFIG = {
   // Default challenge interval
   // For production: 30-60 minutes. For demo: 10 minutes
   // SPK uses monthly cycles with time-based rewards
-  DEFAULT_CHALLENGE_INTERVAL_MS: 10 * 60 * 1000, // 10 minutes (production should be 30-60 min)
+  DEFAULT_CHALLENGE_INTERVAL_MS: 30 * 1000, // 30 seconds for testing (production should be 30-60 min)
   
   // Cache
   BLOCK_CACHE_TTL_MS: 3600000, // 1 hour
@@ -345,7 +345,9 @@ export class PoAEngine {
       return;
     }
 
-    const files = await storage.getAllFiles();
+    const allFiles = await storage.getAllFiles();
+    // Only challenge files that have PoA enabled (real CIDs that exist)
+    const files = allFiles.filter(f => f.poaEnabled === true);
     if (files.length === 0) return;
 
     // OPTIMIZATION: Batch 3-5 challenges per round
@@ -416,7 +418,10 @@ export class PoAEngine {
     file: any, 
     salt: string
   ) {
-    if (this.config.useMockMode) {
+    // LIVE MODE: If node has an endpoint, always use live validation
+    if (node.endpoint) {
+      await this.processSPKChallenge(challengeId, node.id, file.id, file.cid, salt);
+    } else if (this.config.useMockMode) {
       await this.processSimulatedChallenge(challengeId, node.id, file.id, salt);
     } else {
       await this.processSPKChallenge(challengeId, node.id, file.id, file.cid, salt);
@@ -458,6 +463,7 @@ export class PoAEngine {
     let latencyMs = 0;
 
     try {
+      // Compute expected proof hash from our IPFS
       let blockCids = this.blocksCache.get(cid);
       if (!blockCids) {
         try {
@@ -470,7 +476,32 @@ export class PoAEngine {
 
       const expectedProofHash = await createProofHash(this.ipfsClient, salt, cid, blockCids);
 
-      if (this.spkClient && 'validate' in this.spkClient) {
+      // LIVE MODE: Connect directly to node's endpoint if available
+      const nodeEndpoint = (node as any).endpoint;
+      if (nodeEndpoint) {
+        const nodeResponse = await this.challengeNodeDirectly(nodeEndpoint, cid, salt, this.config.validatorUsername);
+        latencyMs = nodeResponse.elapsed || Date.now() - startTime;
+
+        if (nodeResponse.status === "success") {
+          if (nodeResponse.proofHash === expectedProofHash) {
+            result = "success";
+            response = nodeResponse.proofHash || "";
+            console.log(`[PoA Engine] LIVE challenge PASSED: ${(node as any).hiveUsername} (${latencyMs}ms)`);
+          } else {
+            result = "fail";
+            response = "PROOF_MISMATCH";
+            console.log(`[PoA Engine] LIVE challenge FAILED: proof mismatch`);
+          }
+        } else if (nodeResponse.status === "timeout") {
+          result = "fail";
+          response = "TIMEOUT";
+        } else {
+          result = "fail";
+          response = nodeResponse.error || "VALIDATION_FAILED";
+        }
+      }
+      // Fallback to SPK client if no direct endpoint
+      else if (this.spkClient && 'validate' in this.spkClient) {
         const spkResponse = await this.spkClient.validate(cid, salt);
         latencyMs = spkResponse.elapsed || Date.now() - startTime;
 
@@ -491,17 +522,87 @@ export class PoAEngine {
         }
       } else {
         result = "fail";
-        response = "NO_SPK_CLIENT";
+        response = "NO_ENDPOINT";
         latencyMs = Date.now() - startTime;
       }
     } catch (err) {
-      console.error(`[PoA Engine] SPK validation error:`, err);
+      console.error(`[PoA Engine] Validation error:`, err);
       result = "fail";
       response = err instanceof Error ? err.message : "UNKNOWN_ERROR";
       latencyMs = Date.now() - startTime;
     }
 
     await this.recordChallengeResult(challengeId, nodeId, fileId, response, result, latencyMs);
+  }
+
+  // Direct WebSocket challenge to a storage node
+  private async challengeNodeDirectly(
+    endpoint: string,
+    cid: string,
+    salt: string,
+    validatorUsername: string
+  ): Promise<{ status: "success" | "fail" | "timeout"; proofHash?: string; elapsed: number; error?: string }> {
+    const WebSocket = (await import("ws")).default;
+    const wsUrl = endpoint.replace(/^http/, "ws");
+    const timeoutMs = POA_CONFIG.CHALLENGE_TIMEOUT_MS;
+    const startTime = Date.now();
+
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        ws.close();
+        resolve({ status: "timeout", elapsed: timeoutMs });
+      }, timeoutMs);
+
+      let ws: InstanceType<typeof WebSocket>;
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch (err) {
+        clearTimeout(timeout);
+        resolve({ status: "fail", elapsed: Date.now() - startTime, error: "CONNECT_FAILED" });
+        return;
+      }
+
+      ws.on("open", () => {
+        const request = {
+          type: "RequestProof",
+          Hash: salt,
+          CID: cid,
+          User: validatorUsername,
+          Status: "Pending",
+        };
+        ws.send(JSON.stringify(request));
+      });
+
+      ws.on("message", (data: Buffer) => {
+        clearTimeout(timeout);
+        try {
+          const response = JSON.parse(data.toString());
+          const elapsed = Date.now() - startTime;
+          
+          if (response.Status === "Success" || response.status === "success") {
+            resolve({
+              status: "success",
+              proofHash: response.proofHash || response.ProofHash,
+              elapsed,
+            });
+          } else {
+            resolve({
+              status: "fail",
+              elapsed,
+              error: response.error || "VALIDATION_FAILED",
+            });
+          }
+        } catch {
+          resolve({ status: "fail", elapsed: Date.now() - startTime, error: "PARSE_ERROR" });
+        }
+        ws.close();
+      });
+
+      ws.on("error", (err) => {
+        clearTimeout(timeout);
+        resolve({ status: "fail", elapsed: Date.now() - startTime, error: err.message });
+      });
+    });
   }
 
   private async recordChallengeResult(

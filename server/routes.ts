@@ -16,6 +16,8 @@ import { p2pSignaling } from "./p2p-signaling";
 import { WebSocketServer } from "ws";
 import { insertFileSchema, insertValidatorBlacklistSchema, insertEncodingJobSchema, insertEncoderNodeSchema } from "@shared/schema";
 import { z } from "zod";
+import { getIPFSClient } from "./services/ipfs-client";
+import { createProofHash } from "./services/poa-crypto";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -48,6 +50,70 @@ export async function registerRoutes(
   const p2pWss = new WebSocketServer({ noServer: true });
   p2pSignaling.init(p2pWss);
 
+  // PoA Validation WebSocket for storage nodes to respond to challenges
+  const validateWss = new WebSocketServer({ noServer: true });
+  const poaIpfs = getIPFSClient();
+  
+  validateWss.on("connection", (ws) => {
+    console.log("[PoA Validate] Storage node connected");
+    
+    ws.on("message", async (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        console.log(`[PoA Validate] Received challenge:`, message);
+        
+        if (message.type === "RequestProof") {
+          const startTime = Date.now();
+          const cid = message.CID;
+          const salt = message.Hash;
+          const user = message.User;
+          
+          try {
+            // Fetch block CIDs from IPFS
+            let blockCids: string[] = [];
+            try {
+              blockCids = await poaIpfs.refs(cid);
+            } catch {
+              blockCids = [];
+            }
+            
+            // Compute proof hash
+            const proofHash = await createProofHash(poaIpfs, salt, cid, blockCids);
+            const elapsed = Date.now() - startTime;
+            
+            const response = {
+              Hash: salt,
+              CID: cid,
+              User: user,
+              Status: proofHash ? "Success" : "Fail",
+              proofHash: proofHash,
+              elapsed: elapsed,
+            };
+            
+            console.log(`[PoA Validate] Sending response (${elapsed}ms):`, response.Status);
+            ws.send(JSON.stringify(response));
+          } catch (err) {
+            console.error(`[PoA Validate] Error computing proof:`, err);
+            ws.send(JSON.stringify({
+              Hash: salt,
+              CID: cid,
+              User: user,
+              Status: "Fail",
+              error: err instanceof Error ? err.message : "Unknown error",
+              elapsed: Date.now() - startTime,
+            }));
+          }
+        }
+      } catch (err) {
+        console.error(`[PoA Validate] Failed to parse message:`, err);
+      }
+    });
+    
+    ws.on("close", () => {
+      console.log("[PoA Validate] Storage node disconnected");
+    });
+  });
+
   // Handle WebSocket upgrades manually for multiple paths
   httpServer.on("upgrade", (request, socket, head) => {
     const pathname = new URL(request.url || "", `http://${request.headers.host}`).pathname;
@@ -59,6 +125,10 @@ export async function registerRoutes(
     } else if (pathname === "/p2p") {
       p2pWss.handleUpgrade(request, socket, head, (ws) => {
         p2pWss.emit("connection", ws, request);
+      });
+    } else if (pathname === "/validate") {
+      validateWss.handleUpgrade(request, socket, head, (ws) => {
+        validateWss.emit("connection", ws, request);
       });
     } else {
       socket.destroy();

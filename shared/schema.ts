@@ -12,6 +12,7 @@ export const storageNodes = pgTable("storage_nodes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   peerId: text("peer_id").notNull().unique(),
   hiveUsername: text("hive_username").notNull(),
+  endpoint: text("endpoint"), // WebSocket URL for PoA validation (e.g., ws://node.example.com/validate)
   reputation: integer("reputation").notNull().default(50), // 0-100
   status: text("status").notNull().default("active"), // active, probation, banned
   totalProofs: integer("total_proofs").notNull().default(0),

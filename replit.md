@@ -19,6 +19,9 @@ The system features a hybrid Progressive Web App (PWA) architecture:
 
 ### Core Features
 -   **Proof of Access (PoA)**: The core innovation, providing cryptographic validation of file storage. Includes parallel block fetching, a 2-second challenge timeout, LRU block caching, batch challenges, weighted node selection, Hive block entropy for unpredictability, consecutive failure tracking, and streak bonuses.
+    -   **WebSocket Validation Endpoint**: Storage nodes expose a `/validate` WebSocket endpoint to receive challenges (CID + salt) and respond with proof hashes. The validator connects directly to node endpoints for live validation.
+    -   **Live Validation Mode**: When storage nodes have an `endpoint` configured, the PoA engine challenges them directly via WebSocket, verifying proof hashes against locally computed values.
+    -   **PoA-Enabled Files**: Only files with `poa_enabled = true` are selected for challenges, allowing control over which content participates in validation.
 -   **3Speak Integration**: Allows users to browse and pin 3Speak videos to their local IPFS node, with real-time pinning progress tracking.
 -   **Storage Operator Dashboard**: Provides comprehensive tools for storage operators, including:
     -   **Earnings Dashboard**: Tracks HBD earnings, streaks, ban risks, and challenge activity.
