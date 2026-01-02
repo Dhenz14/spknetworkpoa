@@ -13,7 +13,7 @@ import { beneficiaryService } from "./services/beneficiary-service";
 import { ipfsGateway } from "./services/ipfs-gateway";
 import { p2pSignaling } from "./p2p-signaling";
 import { WebSocketServer } from "ws";
-import { insertFileSchema, insertValidatorBlacklistSchema } from "@shared/schema";
+import { insertFileSchema, insertValidatorBlacklistSchema, insertEncodingJobSchema, insertEncoderNodeSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(
@@ -2377,7 +2377,27 @@ export async function registerRoutes(
   // ============================================================
 
   const { encodingService } = await import("./services/encoding-service");
-  await encodingService.initializeProfiles();
+  encodingService.initializeProfiles().catch(console.error);
+
+  const encodingJobSubmitSchema = z.object({
+    owner: z.string().min(1, "Owner is required"),
+    permlink: z.string().min(1, "Permlink is required"),
+    inputCid: z.string().min(1, "Input CID is required"),
+    isShort: z.boolean().optional().default(false),
+    webhookUrl: z.string().url().optional(),
+    originalFilename: z.string().optional(),
+    inputSizeBytes: z.number().optional(),
+    encodingMode: z.enum(["auto", "self", "community"]).optional().default("auto"),
+  });
+
+  const encoderRegisterSchema = z.object({
+    peerId: z.string().min(1, "Peer ID is required"),
+    hiveUsername: z.string().min(1, "Hive username is required"),
+    endpoint: z.string().url().optional(),
+    encoderType: z.enum(["desktop", "browser", "community"]),
+    hardwareAcceleration: z.string().optional(),
+    presetsSupported: z.string().optional(),
+  });
 
   app.get("/api/encoding/stats", async (req, res) => {
     try {
@@ -2424,24 +2444,13 @@ export async function registerRoutes(
 
   app.post("/api/encoding/jobs", async (req, res) => {
     try {
-      const { owner, permlink, inputCid, isShort, webhookUrl, originalFilename, inputSizeBytes, encodingMode } = req.body;
-      
-      if (!owner || !permlink || !inputCid) {
-        res.status(400).json({ error: "Missing required fields: owner, permlink, inputCid" });
+      const validated = encodingJobSubmitSchema.safeParse(req.body);
+      if (!validated.success) {
+        res.status(400).json({ error: validated.error.errors.map(e => e.message).join(", ") });
         return;
       }
       
-      const job = await encodingService.submitJob({
-        owner,
-        permlink,
-        inputCid,
-        isShort,
-        webhookUrl,
-        originalFilename,
-        inputSizeBytes,
-        encodingMode,
-      });
-      
+      const job = await encodingService.submitJob(validated.data);
       res.status(201).json(job);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -2517,22 +2526,13 @@ export async function registerRoutes(
 
   app.post("/api/encoding/encoders/register", async (req, res) => {
     try {
-      const { peerId, hiveUsername, endpoint, encoderType, hardwareAcceleration, presetsSupported } = req.body;
-      
-      if (!peerId || !hiveUsername || !encoderType) {
-        res.status(400).json({ error: "Missing required fields" });
+      const validated = encoderRegisterSchema.safeParse(req.body);
+      if (!validated.success) {
+        res.status(400).json({ error: validated.error.errors.map(e => e.message).join(", ") });
         return;
       }
       
-      const encoder = await encodingService.registerEncoder({
-        peerId,
-        hiveUsername,
-        endpoint,
-        encoderType,
-        hardwareAcceleration,
-        presetsSupported,
-      });
-      
+      const encoder = await encodingService.registerEncoder(validated.data);
       res.json(encoder);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
