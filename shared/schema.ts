@@ -181,10 +181,39 @@ export const contractEvents = pgTable("contract_events", {
 });
 
 // ============================================================
-// PHASE 2: Video Transcoding & Encoder Marketplace
+// PHASE 2: Video Transcoding & Hybrid Encoding System
 // ============================================================
 
-// Transcode Jobs - Track video encoding tasks
+// Encoding Jobs - Hybrid encoding with self/community fallback
+export const encodingJobs = pgTable("encoding_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  owner: text("owner").notNull(), // Hive username
+  permlink: text("permlink").notNull(), // Video permlink
+  inputCid: text("input_cid").notNull(), // Source video CID
+  outputCid: text("output_cid"), // Final manifest CID
+  status: text("status").notNull().default("queued"), // queued, downloading, encoding, uploading, completed, failed
+  progress: integer("progress").notNull().default(0), // 0-100
+  encodingMode: text("encoding_mode").notNull().default("auto"), // self, community, auto
+  encoderType: text("encoder_type"), // desktop, browser, community
+  encoderNodeId: varchar("encoder_node_id"), // Community encoder if used
+  encoderPeerId: text("encoder_peer_id"), // Self-encoder peer ID
+  isShort: boolean("is_short").notNull().default(false), // Short video (480p only)
+  qualitiesEncoded: text("qualities_encoded").default(""), // Comma-separated: 1080p,720p,480p
+  videoUrl: text("video_url"), // ipfs://CID/manifest.m3u8
+  webhookUrl: text("webhook_url"), // Callback URL
+  webhookDelivered: boolean("webhook_delivered").notNull().default(false),
+  hbdCost: text("hbd_cost").default("0"), // Cost if using community encoder
+  errorMessage: text("error_message"),
+  originalFilename: text("original_filename"),
+  inputSizeBytes: integer("input_size_bytes"),
+  outputSizeBytes: integer("output_size_bytes"),
+  processingTimeSec: integer("processing_time_sec"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Transcode Jobs - Legacy table for backward compatibility
 export const transcodeJobs = pgTable("transcode_jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   fileId: varchar("file_id").notNull().references(() => files.id),
@@ -206,15 +235,51 @@ export const encoderNodes = pgTable("encoder_nodes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   peerId: text("peer_id").notNull().unique(),
   hiveUsername: text("hive_username").notNull(),
-  endpoint: text("endpoint"), // Optional public endpoint
+  endpoint: text("endpoint"), // Direct API endpoint for self-encoding
+  encoderType: text("encoder_type").notNull().default("community"), // desktop, browser, community
   presetsSupported: text("presets_supported").notNull().default("hls,mp4-720p"), // Comma-separated
   basePriceHbd: text("base_price_hbd").notNull().default("0.01"), // Base price per minute of video
   availability: text("availability").notNull().default("available"), // available, busy, offline
   jobsCompleted: integer("jobs_completed").notNull().default(0),
+  jobsInProgress: integer("jobs_in_progress").notNull().default(0),
   avgProcessingTime: integer("avg_processing_time").default(0), // Seconds per minute of video
+  hardwareAcceleration: text("hardware_acceleration"), // nvenc, vaapi, qsv, none
   rating: real("rating").default(5.0), // 0-5 star rating
   status: text("status").notNull().default("active"), // active, suspended
+  lastHeartbeat: timestamp("last_heartbeat").defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Encoding Profiles - Standard output quality profiles
+export const encodingProfiles = pgTable("encoding_profiles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(), // 1080p, 720p, 480p, 360p
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  videoBitrate: text("video_bitrate").notNull(), // e.g., "4500k"
+  audioBitrate: text("audio_bitrate").notNull().default("128k"),
+  videoCodec: text("video_codec").notNull().default("h264"),
+  audioCodec: text("audio_codec").notNull().default("aac"),
+  profile: text("profile").notNull().default("high"), // baseline, main, high
+  level: text("level").notNull().default("4.1"),
+  preset: text("preset").notNull().default("medium"), // FFmpeg preset: ultrafast to veryslow
+  isDefault: boolean("is_default").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// User Encoding Settings - Per-user encoding preferences
+export const userEncodingSettings = pgTable("user_encoding_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  username: text("username").notNull().unique(),
+  preferredMode: text("preferred_mode").notNull().default("auto"), // auto, self, community
+  desktopAgentEnabled: boolean("desktop_agent_enabled").notNull().default(false),
+  desktopAgentEndpoint: text("desktop_agent_endpoint"), // http://localhost:3002
+  browserEncodingEnabled: boolean("browser_encoding_enabled").notNull().default(true),
+  maxCommunityHbd: text("max_community_hbd").default("1.00"), // Max HBD willing to pay
+  defaultIsShort: boolean("default_is_short").notNull().default(false),
+  webhookUrl: text("webhook_url"), // Default webhook for completions
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 // ============================================================
@@ -458,6 +523,23 @@ export const insertTranscodeJobSchema = createInsertSchema(transcodeJobs).omit({
 export const insertEncoderNodeSchema = createInsertSchema(encoderNodes).omit({
   id: true,
   createdAt: true,
+  lastHeartbeat: true,
+});
+
+export const insertEncodingJobSchema = createInsertSchema(encodingJobs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEncodingProfileSchema = createInsertSchema(encodingProfiles).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertUserEncodingSettingsSchema = createInsertSchema(userEncodingSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const insertBlocklistEntrySchema = createInsertSchema(blocklistEntries).omit({
@@ -651,12 +733,21 @@ export type InsertStorageContract = z.infer<typeof insertStorageContractSchema>;
 export type ContractEvent = typeof contractEvents.$inferSelect;
 export type InsertContractEvent = z.infer<typeof insertContractEventSchema>;
 
-// Phase 2: Transcoding Types
+// Phase 2: Transcoding & Hybrid Encoding Types
 export type TranscodeJob = typeof transcodeJobs.$inferSelect;
 export type InsertTranscodeJob = z.infer<typeof insertTranscodeJobSchema>;
 
 export type EncoderNode = typeof encoderNodes.$inferSelect;
 export type InsertEncoderNode = z.infer<typeof insertEncoderNodeSchema>;
+
+export type EncodingJob = typeof encodingJobs.$inferSelect;
+export type InsertEncodingJob = z.infer<typeof insertEncodingJobSchema>;
+
+export type EncodingProfile = typeof encodingProfiles.$inferSelect;
+export type InsertEncodingProfile = z.infer<typeof insertEncodingProfileSchema>;
+
+export type UserEncodingSettings = typeof userEncodingSettings.$inferSelect;
+export type InsertUserEncodingSettings = z.infer<typeof insertUserEncodingSettingsSchema>;
 
 // Phase 3: Blocklist Types
 export type BlocklistEntry = typeof blocklistEntries.$inferSelect;
