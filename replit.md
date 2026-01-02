@@ -43,11 +43,12 @@ The system features a hybrid Progressive Web App (PWA) architecture:
 -   **Hybrid Encoding System**: Self-encoding capability with community fallback for video transcoding:
     -   **Desktop Agent Priority**: Uses local FFmpeg with GPU acceleration (NVENC, VAAPI, QSV) for free encoding.
     -   **Browser Fallback**: WebCodecs-based encoding for short videos (<2 min) when desktop agent unavailable. Note: Browser encoding produces video-only output suitable for previews.
-    -   **Community Encoders**: Marketplace of encoding nodes for reliable paid encoding.
+    -   **Paid Encoder Marketplace**: Fixed-price community encoders sorted by reputation score (0-1000). Users select quality (1080p/720p/480p) and choose from available encoders, or submit a "name your price" custom offer and wait for encoder acceptance.
+    -   **Reputation System**: Encoders earn reputation through successful jobs (+10 per 10 jobs), lose reputation for failures (-25), with success rate tracking.
     -   **Job Scheduler**: Lease-based job assignment with priority queue, retry logic with exponential backoff, and automatic expired lease cleanup.
     -   **Encoding Orchestrator**: Coordinates job lifecycle, webhook notifications with HMAC signatures, and encoder selection.
     -   **Desktop Agent Bridge API**: RESTful endpoints for desktop agents to claim/progress/complete encoding jobs.
-    -   **Encoding Dashboard**: Job queue management, status tracking, encoder registration, real-time progress, and settings configuration.
+    -   **Upload Wizard**: 4-step flow (Upload → Quality Selection → Encoder/Pricing → Review) with market price and custom offer modes.
     -   **Multi-Quality HLS**: Standard output format with 1080p/720p/480p renditions, H.264 High Profile @ Level 4.1.
     -   **Webhook Callbacks**: Real-time job status updates via webhooks to external systems with signature verification and replay protection.
 
