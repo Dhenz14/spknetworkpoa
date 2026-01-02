@@ -40,6 +40,13 @@ The system features a hybrid Progressive Web App (PWA) architecture:
     -   **Contribution Tracking**: Tracks bytes shared, segments uploaded, session duration, and P2P ratio per viewer.
     -   **P2P Network Dashboard**: Real-time network stats, active rooms, top contributors leaderboard, and history charts.
     -   **Desktop Agent Super-Seeders**: 24/7 desktop agents act as super-seeders with existing Kubo daemon.
+-   **Hybrid Encoding System**: Self-encoding capability with community fallback for video transcoding:
+    -   **Desktop Agent Priority**: Uses local FFmpeg with GPU acceleration (NVENC, VAAPI, QSV) for free encoding.
+    -   **Browser Fallback**: WebCodecs-based encoding for short videos when desktop agent unavailable.
+    -   **Community Encoders**: Marketplace of encoding nodes for reliable paid encoding.
+    -   **Encoding Dashboard**: Job queue management, status tracking, encoder registration, and settings configuration.
+    -   **Multi-Quality HLS**: Standard output format with 1080p/720p/480p renditions, H.264 High Profile @ Level 4.1.
+    -   **Webhook Callbacks**: Real-time job status updates via webhooks to external systems.
 
 ### Frontend Architecture
 -   **Framework**: React 18 with TypeScript
@@ -63,10 +70,10 @@ The system features a hybrid Progressive Web App (PWA) architecture:
 -   **Reputation-Based Filtering**: Implements quality tiers for storage nodes based on their reputation.
 
 ### Data Models
-The system uses PostgreSQL with Drizzle ORM, organizing data into core tables for storage nodes, files, validators, PoA challenges, and Hive transactions, alongside specific tables for CDN, transcoding, moderation, encryption, reward allocation, and P2P CDN features (p2p_sessions, p2p_contributions, p2p_rooms, p2p_network_stats) across different development phases.
+The system uses PostgreSQL with Drizzle ORM, organizing data into core tables for storage nodes, files, validators, PoA challenges, and Hive transactions, alongside specific tables for CDN, transcoding, moderation, encryption, reward allocation, P2P CDN features (p2p_sessions, p2p_contributions, p2p_rooms, p2p_network_stats), and hybrid encoding (encoding_jobs, encoding_profiles, user_encoding_settings, encoder_nodes) across different development phases.
 
 ### API Routes
-A comprehensive set of API routes manages various functionalities including IPFS gateway, CDN, uploads, contracts, transcoding, moderation, encryption, user settings, beneficiaries, 3Speak integration, and P2P CDN stats/contributions (`/api/p2p/*`).
+A comprehensive set of API routes manages various functionalities including IPFS gateway, CDN, uploads, contracts, transcoding, moderation, encryption, user settings, beneficiaries, 3Speak integration, P2P CDN stats/contributions (`/api/p2p/*`), and hybrid encoding (`/api/encoding/*`).
 
 ## External Dependencies
 
