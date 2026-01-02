@@ -28,6 +28,7 @@ import FraudDetection from "@/pages/fraud-detection";
 import PayoutGenerator from "@/pages/payout-generator";
 import WalletDashboard from "@/pages/wallet-dashboard";
 import P2PNetwork from "@/pages/p2p-network";
+import Encoding from "@/pages/encoding";
 import generatedImage from '@assets/generated_images/a_dark,_futuristic_abstract_mesh_background_with_red_accents..png';
 
 function ProtectedValidatorRoute({ component: Component }: { component: React.ComponentType }) {
@@ -80,6 +81,7 @@ function Router() {
         </Route>
         <Route path="/wallet-dashboard" component={WalletDashboard} />
         <Route path="/p2p-network" component={P2PNetwork} />
+        <Route path="/encoding" component={Encoding} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

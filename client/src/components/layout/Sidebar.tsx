@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, HardDrive, Wallet, Server, Settings, Globe, Hexagon, Play, Wifi, Download, Coins, ShoppingBag, BarChart3, Shield, Zap, AlertTriangle, LogIn, LogOut, FileText, Landmark, Users } from "lucide-react";
+import { LayoutDashboard, HardDrive, Wallet, Server, Settings, Globe, Hexagon, Play, Wifi, Download, Coins, ShoppingBag, BarChart3, Shield, Zap, AlertTriangle, LogIn, LogOut, FileText, Landmark, Users, Video } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNodeConfig } from "@/contexts/NodeConfigContext";
 import { useValidatorAuth } from "@/contexts/ValidatorAuthContext";
@@ -17,6 +17,7 @@ export function Sidebar() {
     { href: "/wallet", label: "Wallet", icon: Wallet },
     { href: "/wallet-dashboard", label: "Network Wallet", icon: Landmark },
     { href: "/p2p-network", label: "P2P Network", icon: Users },
+    { href: "/encoding", label: "Encoding", icon: Video },
     { href: "/earnings", label: "Earnings", icon: Coins },
     { href: "/analytics", label: "Analytics", icon: BarChart3 },
     { href: "/marketplace", label: "Marketplace", icon: ShoppingBag },

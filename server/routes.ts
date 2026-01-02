@@ -2372,5 +2372,210 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================================
+  // Phase 7: Hybrid Encoding API
+  // ============================================================
+
+  const { encodingService } = await import("./services/encoding-service");
+  await encodingService.initializeProfiles();
+
+  app.get("/api/encoding/stats", async (req, res) => {
+    try {
+      const stats = await encodingService.getStats();
+      res.json(stats);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/encoding/profiles", async (req, res) => {
+    try {
+      const profiles = await encodingService.getProfiles();
+      res.json(profiles);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/encoding/jobs", async (req, res) => {
+    try {
+      const { owner, limit } = req.query;
+      const jobs = owner 
+        ? await encodingService.getJobsByOwner(owner as string, Number(limit) || 20)
+        : await encodingService.getRecentJobs(Number(limit) || 50);
+      res.json(jobs);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/encoding/jobs/:id", async (req, res) => {
+    try {
+      const job = await encodingService.getJob(req.params.id);
+      if (!job) {
+        res.status(404).json({ error: "Job not found" });
+        return;
+      }
+      res.json(job);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/encoding/jobs", async (req, res) => {
+    try {
+      const { owner, permlink, inputCid, isShort, webhookUrl, originalFilename, inputSizeBytes, encodingMode } = req.body;
+      
+      if (!owner || !permlink || !inputCid) {
+        res.status(400).json({ error: "Missing required fields: owner, permlink, inputCid" });
+        return;
+      }
+      
+      const job = await encodingService.submitJob({
+        owner,
+        permlink,
+        inputCid,
+        isShort,
+        webhookUrl,
+        originalFilename,
+        inputSizeBytes,
+        encodingMode,
+      });
+      
+      res.status(201).json(job);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/encoding/jobs/:id/progress", async (req, res) => {
+    try {
+      const { progress, status } = req.body;
+      await encodingService.updateJobProgress(req.params.id, progress, status);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/encoding/jobs/:id/complete", async (req, res) => {
+    try {
+      const { outputCid, qualitiesEncoded, processingTimeSec, outputSizeBytes } = req.body;
+      await encodingService.completeJob(req.params.id, {
+        outputCid,
+        qualitiesEncoded: qualitiesEncoded || [],
+        processingTimeSec: processingTimeSec || 0,
+        outputSizeBytes,
+      });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/encoding/jobs/:id/fail", async (req, res) => {
+    try {
+      const { errorMessage } = req.body;
+      await encodingService.failJob(req.params.id, errorMessage || "Unknown error");
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/encoding/webhook", async (req, res) => {
+    try {
+      const { job_id, status, manifest_cid, error, progress, processing_time_seconds, qualities_encoded } = req.body;
+      
+      if (status === "completed" && manifest_cid) {
+        await encodingService.completeJob(job_id, {
+          outputCid: manifest_cid,
+          qualitiesEncoded: qualities_encoded || [],
+          processingTimeSec: processing_time_seconds || 0,
+        });
+      } else if (status === "failed") {
+        await encodingService.failJob(job_id, error || "Encoding failed");
+      } else if (progress !== undefined) {
+        await encodingService.updateJobProgress(job_id, progress, status);
+      }
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/encoding/encoders", async (req, res) => {
+    try {
+      const { type } = req.query;
+      const encoders = await encodingService.getAvailableEncoders(type as string);
+      res.json(encoders);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/encoding/encoders/register", async (req, res) => {
+    try {
+      const { peerId, hiveUsername, endpoint, encoderType, hardwareAcceleration, presetsSupported } = req.body;
+      
+      if (!peerId || !hiveUsername || !encoderType) {
+        res.status(400).json({ error: "Missing required fields" });
+        return;
+      }
+      
+      const encoder = await encodingService.registerEncoder({
+        peerId,
+        hiveUsername,
+        endpoint,
+        encoderType,
+        hardwareAcceleration,
+        presetsSupported,
+      });
+      
+      res.json(encoder);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/encoding/encoders/heartbeat", async (req, res) => {
+    try {
+      const { peerId, jobsInProgress } = req.body;
+      await encodingService.heartbeatEncoder(peerId, jobsInProgress || 0);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/encoding/settings/:username", async (req, res) => {
+    try {
+      const settings = await encodingService.getUserSettings(req.params.username);
+      res.json(settings || { username: req.params.username, preferredMode: "auto" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/encoding/settings/:username", async (req, res) => {
+    try {
+      const settings = await encodingService.updateUserSettings(req.params.username, req.body);
+      res.json(settings);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/encoding/check-desktop-agent", async (req, res) => {
+    try {
+      const { endpoint } = req.body;
+      const status = await encodingService.checkDesktopAgent(endpoint || "http://localhost:3002");
+      res.json(status);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }
