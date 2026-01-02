@@ -151,7 +151,7 @@ export class TranscodingService {
     }
 
     const preset = TRANSCODE_PRESETS.find(p => p.id === job.preset) || null;
-    const encoder = job.encoderNodeId ? await storage.getEncoderNode(job.encoderNodeId) : null;
+    const encoder = job.encoderNodeId ? (await storage.getEncoderNode(job.encoderNodeId) ?? null) : null;
 
     return { job, preset, encoder };
   }

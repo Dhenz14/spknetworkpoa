@@ -2577,5 +2577,141 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================================
+  // Desktop Agent Bridge API - Used by Tauri desktop agent
+  // ============================================================
+  
+  const { encodingOrchestrator } = await import("./services/encoding-orchestrator");
+  const { jobScheduler } = await import("./services/job-scheduler");
+  
+  jobScheduler.start();
+
+  const agentClaimSchema = z.object({
+    encoderId: z.string().min(1),
+    encoderType: z.enum(["desktop", "browser", "community"]),
+    hiveUser: z.string().optional(),
+  });
+
+  app.post("/api/encoding/agent/claim", async (req, res) => {
+    try {
+      const validated = agentClaimSchema.safeParse(req.body);
+      if (!validated.success) {
+        return res.status(400).json({ error: "Invalid request", details: validated.error.flatten() });
+      }
+
+      const { encoderId, encoderType, hiveUser } = validated.data;
+      const result = await encodingOrchestrator.agentClaimJob(encoderId, encoderType, hiveUser);
+      
+      if (!result.job) {
+        return res.json({ job: null, message: "No jobs available" });
+      }
+
+      res.json({
+        job: {
+          id: result.job.id,
+          inputCid: result.job.inputCid,
+          owner: result.job.owner,
+          permlink: result.job.permlink,
+          isShort: result.job.isShort,
+          qualities: result.job.isShort ? ["480p"] : ["1080p", "720p", "480p"],
+        },
+        signature: result.signature,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  const agentProgressSchema = z.object({
+    jobId: z.string().min(1),
+    stage: z.enum(["downloading", "encoding", "encoding_1080p", "encoding_720p", "encoding_480p", "uploading"]),
+    progress: z.number().min(0).max(100),
+    signature: z.string().min(1),
+  });
+
+  app.post("/api/encoding/agent/progress", async (req, res) => {
+    try {
+      const validated = agentProgressSchema.safeParse(req.body);
+      if (!validated.success) {
+        return res.status(400).json({ error: "Invalid request", details: validated.error.flatten() });
+      }
+
+      const { jobId, stage, progress, signature } = validated.data;
+      await encodingOrchestrator.agentReportProgress(jobId, stage, progress, signature);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  const agentCompleteSchema = z.object({
+    jobId: z.string().min(1),
+    outputCid: z.string().min(1),
+    qualitiesEncoded: z.array(z.string()),
+    processingTimeSec: z.number().positive(),
+    outputSizeBytes: z.number().positive().optional(),
+    signature: z.string().min(1),
+  });
+
+  app.post("/api/encoding/agent/complete", async (req, res) => {
+    try {
+      const validated = agentCompleteSchema.safeParse(req.body);
+      if (!validated.success) {
+        return res.status(400).json({ error: "Invalid request", details: validated.error.flatten() });
+      }
+
+      const { jobId, signature, ...result } = validated.data;
+      await encodingOrchestrator.agentCompleteJob(jobId, result, signature);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  const agentFailSchema = z.object({
+    jobId: z.string().min(1),
+    error: z.string().min(1),
+    retryable: z.boolean().default(true),
+    signature: z.string().min(1),
+  });
+
+  app.post("/api/encoding/agent/fail", async (req, res) => {
+    try {
+      const validated = agentFailSchema.safeParse(req.body);
+      if (!validated.success) {
+        return res.status(400).json({ error: "Invalid request", details: validated.error.flatten() });
+      }
+
+      const { jobId, error, retryable, signature } = validated.data;
+      await encodingOrchestrator.agentFailJob(jobId, error, retryable, signature);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/encoding/agent/renew-lease", async (req, res) => {
+    try {
+      const { jobId } = req.body;
+      if (!jobId) {
+        return res.status(400).json({ error: "jobId required" });
+      }
+
+      const renewed = await encodingOrchestrator.renewJobLease(jobId);
+      res.json({ renewed });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/encoding/queue/stats", async (req, res) => {
+    try {
+      const stats = await jobScheduler.getQueueStats();
+      res.json(stats);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }
