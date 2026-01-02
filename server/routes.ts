@@ -2631,6 +2631,23 @@ export async function registerRoutes(
     }
   });
 
+  // Cancel an offer
+  app.delete("/api/encoding/offers/:id", async (req, res) => {
+    try {
+      const { username } = req.query;
+      if (!username || typeof username !== "string") {
+        return res.status(400).json({ error: "Username required" });
+      }
+      const cancelled = await storage.cancelEncodingJobOffer(req.params.id, username);
+      if (!cancelled) {
+        return res.status(404).json({ error: "Offer not found or cannot be cancelled" });
+      }
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/encoding/encoders/register", async (req, res) => {
     try {
       const validated = encoderRegisterSchema.safeParse(req.body);

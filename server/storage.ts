@@ -218,6 +218,7 @@ export interface IStorage {
   getEncodingJobOffers(status: string): Promise<EncodingJobOffer[]>;
   acceptEncodingJobOffer(id: string, encoderId: string): Promise<EncodingJobOffer | undefined>;
   getUserEncodingOffers(username: string): Promise<EncodingJobOffer[]>;
+  cancelEncodingJobOffer(id: string, username: string): Promise<boolean>;
   
   // Phase 3: Blocklist Entries
   getBlocklistEntries(scope: string, scopeOwnerId?: string): Promise<BlocklistEntry[]>;
@@ -890,6 +891,18 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(encodingJobOffers)
       .where(eq(encodingJobOffers.owner, username))
       .orderBy(desc(encodingJobOffers.createdAt));
+  }
+
+  async cancelEncodingJobOffer(id: string, username: string): Promise<boolean> {
+    const [updated] = await db.update(encodingJobOffers)
+      .set({ status: "cancelled" })
+      .where(and(
+        eq(encodingJobOffers.id, id),
+        eq(encodingJobOffers.owner, username),
+        eq(encodingJobOffers.status, "pending")
+      ))
+      .returning();
+    return !!updated;
   }
 
   // ============================================================

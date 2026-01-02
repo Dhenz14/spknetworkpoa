@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,9 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
   Video, 
   Upload, 
@@ -28,7 +31,14 @@ import {
   Timer,
   Zap,
   WifiOff,
-  Wifi
+  Wifi,
+  ChevronRight,
+  ChevronLeft,
+  FileVideo,
+  DollarSign,
+  Star,
+  Check,
+  X
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { BrowserEncoder } from "@/lib/browser-encoder";
@@ -79,6 +89,30 @@ interface EncoderNode {
   jobsInProgress: number;
   hardwareAcceleration?: string;
   rating?: number;
+  price1080p: string;
+  price720p: string;
+  price480p: string;
+  priceAllQualities: string;
+  reputationScore: number;
+  successRate: number;
+  minOfferHbd: string;
+  effectivePrice?: string;
+}
+
+interface EncodingOffer {
+  id: string;
+  jobId: string;
+  owner: string;
+  inputCid: string;
+  qualitiesRequested: string;
+  videoDurationSec: number;
+  offeredHbd: string;
+  marketPriceHbd: string;
+  status: string;
+  acceptedEncoderId?: string;
+  acceptedAt?: string;
+  expiresAt: string;
+  createdAt: string;
 }
 
 interface EncoderStatus {
@@ -97,10 +131,37 @@ interface EncoderStatus {
   };
 }
 
+type WizardStep = 1 | 2 | 3 | 4;
+type PricingMode = "market" | "custom";
+
+interface WizardState {
+  file: File | null;
+  videoDuration: number;
+  qualities: { "1080p": boolean; "720p": boolean; "480p": boolean };
+  pricingMode: PricingMode;
+  selectedEncoder: EncoderNode | null;
+  customPrice: string;
+  owner: string;
+  permlink: string;
+}
+
 export default function EncodingPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [username, setUsername] = useState("");
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [currentStep, setCurrentStep] = useState<WizardStep>(1);
+  const [wizardState, setWizardState] = useState<WizardState>({
+    file: null,
+    videoDuration: 0,
+    qualities: { "1080p": true, "720p": true, "480p": true },
+    pricingMode: "market",
+    selectedEncoder: null,
+    customPrice: "",
+    owner: "",
+    permlink: "",
+  });
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [newJobForm, setNewJobForm] = useState({
     owner: "",
     permlink: "",
@@ -136,6 +197,29 @@ export default function EncodingPage() {
 
   const { data: encoders = [] } = useQuery<EncoderNode[]>({
     queryKey: ["/api/encoding/encoders"],
+    refetchInterval: 10000,
+  });
+
+  const { data: marketEncoders = [] } = useQuery<EncoderNode[]>({
+    queryKey: ["/api/encoding/encoders/market"],
+    queryFn: async () => {
+      const res = await fetch("/api/encoding/encoders/market?quality=all&sortBy=reputation");
+      if (!res.ok) throw new Error("Failed to fetch market encoders");
+      return res.json();
+    },
+    enabled: wizardOpen,
+    refetchInterval: 30000,
+  });
+
+  const { data: userOffers = [], refetch: refetchOffers } = useQuery<EncodingOffer[]>({
+    queryKey: ["/api/encoding/offers/user", wizardState.owner],
+    queryFn: async () => {
+      if (!wizardState.owner) return [];
+      const res = await fetch(`/api/encoding/offers/user/${encodeURIComponent(wizardState.owner)}`);
+      if (!res.ok) throw new Error("Failed to fetch offers");
+      return res.json();
+    },
+    enabled: !!wizardState.owner,
     refetchInterval: 10000,
   });
 
@@ -225,6 +309,51 @@ export default function EncodingPage() {
     },
   });
 
+  const createOfferMutation = useMutation({
+    mutationFn: async (data: {
+      inputCid: string;
+      qualitiesRequested: string[];
+      videoDurationSec: number;
+      offeredHbd: string;
+      owner: string;
+      permlink: string;
+    }) => {
+      const res = await fetch("/api/encoding/offers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to create offer");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Offer Created", description: "Your custom price offer has been submitted" });
+      queryClient.invalidateQueries({ queryKey: ["/api/encoding/offers/user"] });
+      setWizardOpen(false);
+      resetWizard();
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const cancelOfferMutation = useMutation({
+    mutationFn: async ({ offerId, username }: { offerId: string; username: string }) => {
+      const res = await fetch(`/api/encoding/offers/${offerId}?username=${encodeURIComponent(username)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to cancel offer");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Offer Cancelled", description: "Your offer has been cancelled" });
+      refetchOffers();
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const checkDesktopAgentMutation = useMutation({
     mutationFn: async (endpoint: string) => {
       const res = await fetch("/api/encoding/check-desktop-agent", {
@@ -250,6 +379,114 @@ export default function EncodingPage() {
     },
   });
 
+  const resetWizard = () => {
+    setCurrentStep(1);
+    setWizardState({
+      file: null,
+      videoDuration: 0,
+      qualities: { "1080p": true, "720p": true, "480p": true },
+      pricingMode: "market",
+      selectedEncoder: null,
+      customPrice: "",
+      owner: "",
+      permlink: "",
+    });
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setWizardState(prev => ({ ...prev, file }));
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.onloadedmetadata = () => {
+        setWizardState(prev => ({ ...prev, videoDuration: Math.round(video.duration) }));
+        URL.revokeObjectURL(video.src);
+      };
+      video.src = URL.createObjectURL(file);
+    }
+  };
+
+  const getSelectedQualities = () => {
+    return Object.entries(wizardState.qualities)
+      .filter(([_, selected]) => selected)
+      .map(([quality]) => quality);
+  };
+
+  const calculateTotalCost = (encoder: EncoderNode | null) => {
+    if (!encoder || wizardState.videoDuration === 0) return "0.00";
+    const qualities = getSelectedQualities();
+    const durationMinutes = wizardState.videoDuration / 60;
+    
+    if (qualities.length === 3) {
+      return (parseFloat(encoder.priceAllQualities) * durationMinutes).toFixed(4);
+    }
+    
+    let total = 0;
+    if (qualities.includes("1080p")) total += parseFloat(encoder.price1080p);
+    if (qualities.includes("720p")) total += parseFloat(encoder.price720p);
+    if (qualities.includes("480p")) total += parseFloat(encoder.price480p);
+    
+    return (total * durationMinutes).toFixed(4);
+  };
+
+  const getReputationBadge = (score: number) => {
+    const percentage = (score / 1000) * 100;
+    if (percentage >= 80) {
+      return <Badge className="bg-green-500" data-testid="badge-reputation-high">{percentage.toFixed(0)}%</Badge>;
+    } else if (percentage >= 60) {
+      return <Badge className="bg-yellow-500" data-testid="badge-reputation-medium">{percentage.toFixed(0)}%</Badge>;
+    }
+    return <Badge className="bg-red-500" data-testid="badge-reputation-low">{percentage.toFixed(0)}%</Badge>;
+  };
+
+  const formatDurationDisplay = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${minutes}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const canProceedToStep = (step: WizardStep): boolean => {
+    switch (step) {
+      case 2:
+        return !!wizardState.file && wizardState.videoDuration > 0 && !!wizardState.owner;
+      case 3:
+        return getSelectedQualities().length > 0;
+      case 4:
+        if (wizardState.pricingMode === "market") {
+          return !!wizardState.selectedEncoder;
+        }
+        return !!wizardState.customPrice && parseFloat(wizardState.customPrice) > 0;
+      default:
+        return true;
+    }
+  };
+
+  const handleSubmitWizard = async () => {
+    const qualities = getSelectedQualities();
+    
+    if (wizardState.pricingMode === "custom") {
+      await createOfferMutation.mutateAsync({
+        inputCid: `mock-cid-${Date.now()}`,
+        qualitiesRequested: qualities,
+        videoDurationSec: wizardState.videoDuration,
+        offeredHbd: wizardState.customPrice,
+        owner: wizardState.owner,
+        permlink: wizardState.permlink || `video-${Date.now()}`,
+      });
+    } else if (wizardState.selectedEncoder) {
+      await submitJobMutation.mutateAsync({
+        owner: wizardState.owner,
+        permlink: wizardState.permlink || `video-${Date.now()}`,
+        inputCid: `mock-cid-${Date.now()}`,
+        isShort: qualities.length === 1 && qualities[0] === "480p",
+        useBrowserEncoder: false,
+      });
+      setWizardOpen(false);
+      resetWizard();
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":
@@ -264,6 +501,14 @@ export default function EncodingPage() {
       case "encoding":
       case "uploading":
         return <Badge className="bg-blue-500 hover:bg-blue-600" data-testid="badge-status-encoding">{status}</Badge>;
+      case "pending":
+        return <Badge className="bg-purple-500 hover:bg-purple-600" data-testid="badge-status-pending">pending</Badge>;
+      case "accepted":
+        return <Badge className="bg-green-500 hover:bg-green-600" data-testid="badge-status-accepted">accepted</Badge>;
+      case "cancelled":
+        return <Badge variant="secondary" data-testid="badge-status-cancelled">cancelled</Badge>;
+      case "expired":
+        return <Badge variant="secondary" data-testid="badge-status-expired">expired</Badge>;
       default:
         return <Badge variant="secondary" data-testid="badge-status-unknown">{status}</Badge>;
     }
@@ -332,9 +577,332 @@ export default function EncodingPage() {
   };
 
   const activeJobs = jobs.filter(j => ["downloading", "encoding", "uploading", "assigned"].includes(j.status));
-  const queuedJobs = jobs.filter(j => j.status === "queued");
-  const completedJobs = jobs.filter(j => j.status === "completed");
-  const failedJobs = jobs.filter(j => j.status === "failed");
+  const pendingOffers = userOffers.filter(o => o.status === "pending");
+
+  const renderWizardStep = () => {
+    switch (currentStep) {
+      case 1:
+        return (
+          <div className="space-y-6">
+            <div className="text-center">
+              <FileVideo className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold">Upload Your Video</h3>
+              <p className="text-sm text-muted-foreground">Select a video file to encode for streaming</p>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="wizard-owner">Hive Username</Label>
+                <Input
+                  id="wizard-owner"
+                  placeholder="your-hive-username"
+                  value={wizardState.owner}
+                  onChange={(e) => setWizardState(prev => ({ ...prev, owner: e.target.value }))}
+                  data-testid="input-wizard-owner"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="wizard-permlink">Permlink (optional)</Label>
+                <Input
+                  id="wizard-permlink"
+                  placeholder="my-awesome-video"
+                  value={wizardState.permlink}
+                  onChange={(e) => setWizardState(prev => ({ ...prev, permlink: e.target.value }))}
+                  data-testid="input-wizard-permlink"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="video-file">Video File</Label>
+                <div className="border-2 border-dashed rounded-lg p-8 text-center hover:border-primary transition-colors">
+                  <input
+                    type="file"
+                    id="video-file"
+                    accept="video/*"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    data-testid="input-video-file"
+                  />
+                  <label htmlFor="video-file" className="cursor-pointer block">
+                    {wizardState.file ? (
+                      <div className="space-y-2">
+                        <CheckCircle className="h-10 w-10 mx-auto text-green-500" />
+                        <p className="font-medium">{wizardState.file.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatBytes(wizardState.file.size)} • Duration: {formatDurationDisplay(wizardState.videoDuration)}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Upload className="h-10 w-10 mx-auto text-muted-foreground" />
+                        <p className="font-medium">Click to select video</p>
+                        <p className="text-sm text-muted-foreground">MP4, WebM, MOV, AVI supported</p>
+                      </div>
+                    )}
+                  </label>
+                </div>
+              </div>
+              
+              {wizardState.videoDuration > 0 && (
+                <div className="flex items-center gap-2 p-3 bg-green-500/10 rounded-lg">
+                  <Clock className="h-5 w-5 text-green-500" />
+                  <span className="text-sm" data-testid="text-video-duration">
+                    Video duration: {formatDurationDisplay(wizardState.videoDuration)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      
+      case 2:
+        return (
+          <div className="space-y-6">
+            <div className="text-center">
+              <Settings className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold">Select Output Qualities</h3>
+              <p className="text-sm text-muted-foreground">Choose which resolutions to encode</p>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    id="select-all"
+                    checked={wizardState.qualities["1080p"] && wizardState.qualities["720p"] && wizardState.qualities["480p"]}
+                    onCheckedChange={(checked) => {
+                      const isChecked = checked === true;
+                      setWizardState(prev => ({
+                        ...prev,
+                        qualities: { "1080p": isChecked, "720p": isChecked, "480p": isChecked }
+                      }));
+                    }}
+                    data-testid="checkbox-select-all"
+                  />
+                  <Label htmlFor="select-all" className="font-semibold cursor-pointer">Select All</Label>
+                </div>
+                <Badge variant="secondary">Bundle discount</Badge>
+              </div>
+              
+              <Separator />
+              
+              {(["1080p", "720p", "480p"] as const).map((quality) => (
+                <div key={quality} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <Checkbox
+                      id={`quality-${quality}`}
+                      checked={wizardState.qualities[quality]}
+                      onCheckedChange={(checked) => {
+                        setWizardState(prev => ({
+                          ...prev,
+                          qualities: { ...prev.qualities, [quality]: checked === true }
+                        }));
+                      }}
+                      data-testid={`checkbox-quality-${quality}`}
+                    />
+                    <Label htmlFor={`quality-${quality}`} className="cursor-pointer">
+                      <span className="font-medium">{quality}</span>
+                      <span className="text-muted-foreground ml-2">
+                        ({quality === "1080p" ? "1920×1080" : quality === "720p" ? "1280×720" : "854×480"})
+                      </span>
+                    </Label>
+                  </div>
+                </div>
+              ))}
+              
+              {getSelectedQualities().length === 0 && (
+                <div className="text-sm text-red-500 text-center">
+                  Please select at least one quality
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      
+      case 3:
+        return (
+          <div className="space-y-6">
+            <div className="text-center">
+              <DollarSign className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold">Choose Pricing Option</h3>
+              <p className="text-sm text-muted-foreground">Select an encoder or name your price</p>
+            </div>
+            
+            <RadioGroup
+              value={wizardState.pricingMode}
+              onValueChange={(value: PricingMode) => setWizardState(prev => ({ ...prev, pricingMode: value, selectedEncoder: null }))}
+              className="space-y-4"
+            >
+              <div className={`p-4 border rounded-lg cursor-pointer transition-colors ${wizardState.pricingMode === "market" ? "border-primary bg-primary/5" : ""}`}>
+                <div className="flex items-center gap-3">
+                  <RadioGroupItem value="market" id="pricing-market" data-testid="radio-pricing-market" />
+                  <Label htmlFor="pricing-market" className="cursor-pointer flex-1">
+                    <div className="font-semibold">Market Price</div>
+                    <div className="text-sm text-muted-foreground">Choose from community encoders</div>
+                  </Label>
+                </div>
+              </div>
+              
+              <div className={`p-4 border rounded-lg cursor-pointer transition-colors ${wizardState.pricingMode === "custom" ? "border-primary bg-primary/5" : ""}`}>
+                <div className="flex items-center gap-3">
+                  <RadioGroupItem value="custom" id="pricing-custom" data-testid="radio-pricing-custom" />
+                  <Label htmlFor="pricing-custom" className="cursor-pointer flex-1">
+                    <div className="font-semibold">Name Your Price</div>
+                    <div className="text-sm text-muted-foreground">Submit a custom offer and wait for acceptance</div>
+                  </Label>
+                </div>
+              </div>
+            </RadioGroup>
+            
+            {wizardState.pricingMode === "market" && (
+              <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                <Label>Available Encoders</Label>
+                {marketEncoders.length === 0 ? (
+                  <div className="text-center py-4 text-muted-foreground">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                    Loading encoders...
+                  </div>
+                ) : (
+                  marketEncoders.filter(e => e.availability === "available").map((encoder) => (
+                    <div
+                      key={encoder.id}
+                      onClick={() => setWizardState(prev => ({ ...prev, selectedEncoder: encoder }))}
+                      className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                        wizardState.selectedEncoder?.id === encoder.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                      }`}
+                      data-testid={`encoder-card-${encoder.id}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            wizardState.selectedEncoder?.id === encoder.id ? "border-primary" : "border-muted-foreground"
+                          }`}>
+                            {wizardState.selectedEncoder?.id === encoder.id && (
+                              <div className="w-2 h-2 rounded-full bg-primary" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-medium flex items-center gap-2">
+                              {encoder.hiveUsername}
+                              {getReputationBadge(encoder.reputationScore)}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {encoder.jobsCompleted} jobs • {encoder.successRate.toFixed(0)}% success
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-primary">
+                            {calculateTotalCost(encoder)} HBD
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            for {formatDurationDisplay(wizardState.videoDuration)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+            
+            {wizardState.pricingMode === "custom" && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="custom-price">Your Offer (HBD)</Label>
+                  <Input
+                    id="custom-price"
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    placeholder="0.00"
+                    value={wizardState.customPrice}
+                    onChange={(e) => setWizardState(prev => ({ ...prev, customPrice: e.target.value }))}
+                    data-testid="input-custom-price"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Enter a price below market rate. Encoders will see your offer and may accept it.
+                  </p>
+                </div>
+                
+                {marketEncoders.length > 0 && (
+                  <div className="p-3 bg-muted rounded-lg text-sm">
+                    <div className="flex justify-between">
+                      <span>Lowest market price:</span>
+                      <span className="font-medium">{calculateTotalCost(marketEncoders[0])} HBD</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      
+      case 4:
+        return (
+          <div className="space-y-6">
+            <div className="text-center">
+              <CheckCircle className="h-16 w-16 mx-auto text-green-500 mb-4" />
+              <h3 className="text-lg font-semibold">Review & Submit</h3>
+              <p className="text-sm text-muted-foreground">Confirm your encoding request</p>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="p-4 border rounded-lg space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Video</span>
+                  <span className="font-medium">{wizardState.file?.name}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Duration</span>
+                  <span className="font-medium" data-testid="review-duration">{formatDurationDisplay(wizardState.videoDuration)}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Qualities</span>
+                  <span className="font-medium" data-testid="review-qualities">{getSelectedQualities().join(", ")}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Pricing</span>
+                  <span className="font-medium">
+                    {wizardState.pricingMode === "market" ? "Market Price" : "Custom Offer"}
+                  </span>
+                </div>
+                {wizardState.pricingMode === "market" && wizardState.selectedEncoder && (
+                  <>
+                    <Separator />
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Encoder</span>
+                      <span className="font-medium">{wizardState.selectedEncoder.hiveUsername}</span>
+                    </div>
+                  </>
+                )}
+                <Separator />
+                <div className="flex justify-between text-lg">
+                  <span className="font-semibold">Total Cost</span>
+                  <span className="font-bold text-primary" data-testid="review-total-cost">
+                    {wizardState.pricingMode === "market" 
+                      ? `${calculateTotalCost(wizardState.selectedEncoder)} HBD`
+                      : `${wizardState.customPrice || "0"} HBD`
+                    }
+                  </span>
+                </div>
+              </div>
+              
+              {wizardState.pricingMode === "custom" && (
+                <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-sm">
+                  <AlertCircle className="h-4 w-4 inline mr-2 text-yellow-500" />
+                  Your offer will be visible to all encoders. The first encoder to accept will process your video.
+                </div>
+              )}
+            </div>
+          </div>
+        );
+    }
+  };
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -348,18 +916,147 @@ export default function EncodingPage() {
             Self-encode with desktop agent, browser, or use community encoders
           </p>
         </div>
-        <Button 
-          variant="outline" 
-          onClick={() => {
-            queryClient.invalidateQueries();
-            checkDesktopAgent();
-          }}
-          data-testid="button-refresh-encoding"
-        >
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Dialog open={wizardOpen} onOpenChange={(open) => { setWizardOpen(open); if (!open) resetWizard(); }}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-upload-video">
+                <Upload className="h-4 w-4 mr-2" />
+                Upload New Video
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Upload Video Wizard</DialogTitle>
+                <DialogDescription>
+                  Step {currentStep} of 4
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="flex justify-center mb-6">
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4].map((step) => (
+                    <div key={step} className="flex items-center">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+                          step === currentStep
+                            ? "bg-primary text-primary-foreground"
+                            : step < currentStep
+                            ? "bg-green-500 text-white"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                        data-testid={`wizard-step-${step}`}
+                      >
+                        {step < currentStep ? <Check className="h-4 w-4" /> : step}
+                      </div>
+                      {step < 4 && (
+                        <div className={`w-8 h-1 mx-1 ${step < currentStep ? "bg-green-500" : "bg-muted"}`} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {renderWizardStep()}
+              
+              <div className="flex justify-between mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => setCurrentStep(prev => Math.max(1, prev - 1) as WizardStep)}
+                  disabled={currentStep === 1}
+                  data-testid="button-wizard-back"
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Back
+                </Button>
+                
+                {currentStep < 4 ? (
+                  <Button
+                    onClick={() => setCurrentStep(prev => Math.min(4, prev + 1) as WizardStep)}
+                    disabled={!canProceedToStep(currentStep + 1 as WizardStep)}
+                    data-testid="button-wizard-next"
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleSubmitWizard}
+                    disabled={createOfferMutation.isPending || submitJobMutation.isPending}
+                    data-testid="button-wizard-submit"
+                  >
+                    {(createOfferMutation.isPending || submitJobMutation.isPending) ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Check className="h-4 w-4 mr-2" />
+                    )}
+                    {wizardState.pricingMode === "custom" ? "Submit Offer" : "Start Encoding"}
+                  </Button>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+          
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              queryClient.invalidateQueries();
+              checkDesktopAgent();
+            }}
+            data-testid="button-refresh-encoding"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
       </div>
+
+      {pendingOffers.length > 0 && (
+        <Card data-testid="panel-pending-offers">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Your Pending Offers
+            </CardTitle>
+            <CardDescription>Custom price offers waiting for encoder acceptance</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {pendingOffers.map((offer) => (
+                <div key={offer.id} className="flex items-center justify-between p-4 border rounded-lg" data-testid={`offer-card-${offer.id}`}>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{offer.qualitiesRequested}</span>
+                      {getStatusBadge(offer.status)}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Duration: {formatDuration(offer.videoDurationSec)} • 
+                      Offered: {offer.offeredHbd} HBD • 
+                      Market: {offer.marketPriceHbd} HBD
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Expires: {new Date(offer.expiresAt).toLocaleString()}
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => cancelOfferMutation.mutate({ offerId: offer.id, username: offer.owner })}
+                    disabled={cancelOfferMutation.isPending}
+                    data-testid={`button-cancel-offer-${offer.id}`}
+                  >
+                    {cancelOfferMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <X className="h-4 w-4" />
+                    )}
+                    Cancel
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card data-testid="panel-encoder-status">
@@ -812,6 +1509,21 @@ export default function EncodingPage() {
                         )}
                         <div>Jobs: {encoder.jobsCompleted} completed, {encoder.jobsInProgress} active</div>
                         {encoder.rating && <div>Rating: {encoder.rating.toFixed(1)}/5.0</div>}
+                        <div className="flex items-center gap-2">
+                          <span>Reputation:</span>
+                          {getReputationBadge(encoder.reputationScore || 0)}
+                        </div>
+                        <div>Success Rate: {(encoder.successRate || 0).toFixed(0)}%</div>
+                      </div>
+                      <Separator />
+                      <div className="text-sm">
+                        <div className="font-medium mb-1">Pricing (per minute):</div>
+                        <div className="grid grid-cols-2 gap-1 text-muted-foreground">
+                          <span>1080p: {encoder.price1080p || "0.02"} HBD</span>
+                          <span>720p: {encoder.price720p || "0.01"} HBD</span>
+                          <span>480p: {encoder.price480p || "0.005"} HBD</span>
+                          <span>Bundle: {encoder.priceAllQualities || "0.03"} HBD</span>
+                        </div>
                       </div>
                     </div>
                   ))}
