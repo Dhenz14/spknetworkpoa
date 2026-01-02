@@ -190,12 +190,23 @@ export class JobScheduler {
       .where(eq(encodingJobs.id, jobId));
 
     if (job.assignedEncoderId) {
-      await db.update(encoderNodes)
-        .set({
-          jobsCompleted: sql`${encoderNodes.jobsCompleted} + 1`,
-          jobsInProgress: sql`GREATEST(${encoderNodes.jobsInProgress} - 1, 0)`,
-        })
-        .where(eq(encoderNodes.id, job.assignedEncoderId));
+      // Update job counts and reputation on successful completion
+      const encoder = await db.select().from(encoderNodes).where(eq(encoderNodes.id, job.assignedEncoderId));
+      if (encoder.length > 0) {
+        const currentEncoder = encoder[0];
+        const totalJobs = (currentEncoder.jobsCompleted || 0) + 1;
+        const newSuccessRate = ((currentEncoder.successRate || 100) * (totalJobs - 1) + 100) / totalJobs;
+        const reputationBoost = Math.min(10, Math.floor(totalJobs / 10)); // Gain reputation for consistent work
+        
+        await db.update(encoderNodes)
+          .set({
+            jobsCompleted: sql`${encoderNodes.jobsCompleted} + 1`,
+            jobsInProgress: sql`GREATEST(${encoderNodes.jobsInProgress} - 1, 0)`,
+            successRate: newSuccessRate,
+            reputationScore: sql`LEAST(${encoderNodes.reputationScore} + ${reputationBoost}, 1000)`,
+          })
+          .where(eq(encoderNodes.id, job.assignedEncoderId));
+      }
     }
 
     await this.logEvent(jobId, "completed", job.status || "uploading", "completed", job.assignedEncoderId, {
@@ -218,6 +229,24 @@ export class JobScheduler {
           completedAt: new Date(),
         })
         .where(eq(encodingJobs.id, jobId));
+
+      // Apply reputation penalty for failed jobs
+      if (job?.assignedEncoderId) {
+        const encoder = await db.select().from(encoderNodes).where(eq(encoderNodes.id, job.assignedEncoderId));
+        if (encoder.length > 0) {
+          const currentEncoder = encoder[0];
+          const totalJobs = (currentEncoder.jobsCompleted || 0) + 1;
+          const newSuccessRate = ((currentEncoder.successRate || 100) * totalJobs - 100) / totalJobs;
+          
+          await db.update(encoderNodes)
+            .set({
+              jobsInProgress: sql`GREATEST(${encoderNodes.jobsInProgress} - 1, 0)`,
+              successRate: Math.max(0, newSuccessRate),
+              reputationScore: sql`GREATEST(${encoderNodes.reputationScore} - 25, 0)`, // Penalty for failure
+            })
+            .where(eq(encoderNodes.id, job.assignedEncoderId));
+        }
+      }
 
       await this.logEvent(jobId, "failed", job?.status || "unknown", "failed", job?.assignedEncoderId, {
         error,
