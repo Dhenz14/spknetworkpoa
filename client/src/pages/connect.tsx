@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,11 +19,37 @@ import {
   Laptop,
   Monitor,
   Download,
-  Sparkles
+  Sparkles,
+  CheckCircle2,
+  AlertCircle,
+  Zap,
+  Activity
 } from "lucide-react";
 import { Link } from "wouter";
 import { useNodeConfig } from "@/contexts/NodeConfigContext";
 import { formatBytes, testBackendIPFSConnection, type ConnectionMode } from "@/lib/node-config";
+
+interface DesktopAgentStatusResponse {
+  running: boolean;
+  peerId: string | null;
+  stats: {
+    repoSize: number;
+    numObjects: number;
+    bandwidthIn: number;
+    bandwidthOut: number;
+  } | null;
+  config: {
+    hiveUsername: string;
+    autoStart: boolean;
+  } | null;
+  earnings: {
+    totalHbd: string;
+    challengesPassed: number;
+    streak: number;
+  } | null;
+}
+
+const DESKTOP_AGENT_URL = "http://localhost:5111";
 
 export default function Connect() {
   const { toast } = useToast();
@@ -39,6 +66,61 @@ export default function Connect() {
     initializeBrowserNode,
     stopBrowserNode
   } = useNodeConfig();
+
+  const [desktopAgentStatus, setDesktopAgentStatus] = useState<DesktopAgentStatusResponse | null>(null);
+  const [isPollingAgent, setIsPollingAgent] = useState(false);
+
+  const pollDesktopAgent = useCallback(async () => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2000);
+
+      const response = await fetch(`${DESKTOP_AGENT_URL}/api/status`, {
+        method: "GET",
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (response.ok) {
+        const status: DesktopAgentStatusResponse = await response.json();
+        setDesktopAgentStatus(status);
+      } else {
+        setDesktopAgentStatus(null);
+      }
+    } catch {
+      setDesktopAgentStatus(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    setIsPollingAgent(true);
+    pollDesktopAgent();
+
+    const interval = setInterval(pollDesktopAgent, 3000);
+
+    return () => {
+      clearInterval(interval);
+      setIsPollingAgent(false);
+    };
+  }, [pollDesktopAgent]);
+
+  const handleConnectToDesktopAgent = () => {
+    if (desktopAgentStatus?.running && desktopAgentStatus.peerId) {
+      setMode("local");
+      updateConfig({
+        ipfsApiUrl: `${DESKTOP_AGENT_URL}/api/ipfs`,
+        ipfsGatewayUrl: `${DESKTOP_AGENT_URL}/gateway`,
+        isConnected: true,
+        peerId: desktopAgentStatus.peerId,
+        hiveUsername: desktopAgentStatus.config?.hiveUsername || "",
+      });
+      toast({
+        title: "Connected to Desktop Agent!",
+        description: "You're now using your desktop agent's IPFS node",
+      });
+    }
+  };
 
   const handleModeChange = (mode: ConnectionMode) => {
     setMode(mode);
@@ -248,6 +330,183 @@ export default function Connect() {
               <Globe className="h-12 w-12 mx-auto mb-3 opacity-50" />
               <p>Running in Demo Mode</p>
               <p className="text-sm">Using simulated data for demonstration purposes</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/50 bg-card/50 backdrop-blur-sm" data-testid="card-desktop-agent">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Laptop className="h-5 w-5" />
+                Desktop Agent
+              </CardTitle>
+              <CardDescription>
+                Run a 24/7 IPFS node and earn HBD rewards
+              </CardDescription>
+            </div>
+            {desktopAgentStatus?.running ? (
+              <Badge variant="default" className="bg-green-500 text-white" data-testid="badge-agent-running">
+                <CheckCircle2 className="w-3 h-3 mr-1" />
+                Desktop Agent Running
+              </Badge>
+            ) : (
+              <Badge variant="secondary" data-testid="badge-agent-not-detected">
+                <AlertCircle className="w-3 h-3 mr-1" />
+                Not Detected
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {desktopAgentStatus?.running ? (
+            <div className="space-y-4">
+              {desktopAgentStatus.peerId && (
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Peer ID</p>
+                    <p className="font-mono text-sm truncate max-w-md" data-testid="text-agent-peer-id">
+                      {desktopAgentStatus.peerId}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {desktopAgentStatus.stats && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="p-3 bg-muted/50 rounded-lg text-center">
+                    <p className="text-xl font-bold" data-testid="text-agent-repo-size">
+                      {formatBytes(desktopAgentStatus.stats.repoSize)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Storage Used</p>
+                  </div>
+                  <div className="p-3 bg-muted/50 rounded-lg text-center">
+                    <p className="text-xl font-bold" data-testid="text-agent-num-objects">
+                      {desktopAgentStatus.stats.numObjects.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Objects</p>
+                  </div>
+                  <div className="p-3 bg-muted/50 rounded-lg text-center">
+                    <p className="text-xl font-bold" data-testid="text-agent-bandwidth-in">
+                      {formatBytes(desktopAgentStatus.stats.bandwidthIn)}/s
+                    </p>
+                    <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                      <Activity className="h-3 w-3" /> In
+                    </p>
+                  </div>
+                  <div className="p-3 bg-muted/50 rounded-lg text-center">
+                    <p className="text-xl font-bold" data-testid="text-agent-bandwidth-out">
+                      {formatBytes(desktopAgentStatus.stats.bandwidthOut)}/s
+                    </p>
+                    <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                      <Activity className="h-3 w-3" /> Out
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {desktopAgentStatus.earnings && (
+                <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-green-500" />
+                      <span className="text-sm font-medium">Earnings</span>
+                    </div>
+                    <span className="font-bold text-green-600" data-testid="text-agent-total-hbd">
+                      {desktopAgentStatus.earnings.totalHbd}
+                    </span>
+                  </div>
+                  <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+                    <span data-testid="text-agent-challenges">
+                      {desktopAgentStatus.earnings.challengesPassed} challenges passed
+                    </span>
+                    <span data-testid="text-agent-streak">
+                      {desktopAgentStatus.earnings.streak} day streak
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {desktopAgentStatus.config?.hiveUsername && (
+                <p className="text-sm text-muted-foreground">
+                  Hive Account: <span className="font-medium" data-testid="text-agent-hive-username">@{desktopAgentStatus.config.hiveUsername}</span>
+                </p>
+              )}
+
+              <Button
+                onClick={handleConnectToDesktopAgent}
+                className="w-full"
+                data-testid="button-connect-desktop-agent"
+              >
+                <Laptop className="h-4 w-4 mr-2" />
+                Connect to Desktop Agent
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="text-center py-4">
+                <Laptop className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-50" />
+                <p className="text-muted-foreground font-medium">Desktop Agent Not Detected</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Follow the steps below to set up your agent
+                </p>
+              </div>
+
+              <div className="space-y-3 p-4 bg-muted/30 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-sm font-medium shrink-0">
+                    1
+                  </div>
+                  <div>
+                    <p className="font-medium">Download the desktop agent</p>
+                    <Link href="/download">
+                      <Button variant="link" className="h-auto p-0 text-primary" data-testid="link-download-agent">
+                        <Download className="h-3 w-3 mr-1" />
+                        Go to download page
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-sm font-medium shrink-0">
+                    2
+                  </div>
+                  <div>
+                    <p className="font-medium">Install and run the app</p>
+                    <p className="text-sm text-muted-foreground">
+                      Open the downloaded file and follow the installation wizard
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-sm font-medium shrink-0">
+                    3
+                  </div>
+                  <div>
+                    <p className="font-medium">Wait for IPFS to initialize</p>
+                    <p className="text-sm text-muted-foreground">
+                      This typically takes 30-60 seconds on first launch
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-sm font-medium shrink-0">
+                    4
+                  </div>
+                  <div>
+                    <p className="font-medium">This page will automatically detect your agent</p>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <RefreshCw className={`h-3 w-3 ${isPollingAgent ? "animate-spin" : ""}`} />
+                      Checking every 3 seconds...
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>
