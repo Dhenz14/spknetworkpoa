@@ -3,12 +3,14 @@ import * as path from 'path';
 import { KuboManager } from './kubo';
 import { ApiServer } from './api';
 import { ConfigStore } from './config';
+import { AutoUpdater } from './updater';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let kuboManager: KuboManager;
 let apiServer: ApiServer;
 let configStore: ConfigStore;
+let autoUpdater: AutoUpdater;
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -64,6 +66,8 @@ function updateTrayMenu(status: string): void {
     { label: 'Show Dashboard', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
     { label: 'Open Web App', click: () => { require('electron').shell.openExternal('http://localhost:5000'); } },
     { type: 'separator' },
+    { label: 'Check for Updates', click: () => { autoUpdater?.checkForUpdates(); } },
+    { type: 'separator' },
     { label: 'Quit', click: () => { app.quit(); } },
   ]);
 
@@ -76,6 +80,8 @@ async function initialize(): Promise<void> {
   configStore = new ConfigStore();
   kuboManager = new KuboManager(configStore);
   apiServer = new ApiServer(kuboManager, configStore);
+  autoUpdater = new AutoUpdater();
+  autoUpdater.setMainWindow(mainWindow);
 
   try {
     await kuboManager.start();
@@ -93,6 +99,11 @@ async function initialize(): Promise<void> {
   } catch (error) {
     console.error('[SPK] Failed to start API server:', error);
   }
+
+  // Check for updates after startup
+  setTimeout(() => {
+    autoUpdater.checkForUpdates();
+  }, 5000);
 }
 
 app.whenReady().then(async () => {

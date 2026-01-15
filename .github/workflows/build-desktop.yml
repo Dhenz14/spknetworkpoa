@@ -44,7 +44,7 @@ jobs:
         working-directory: desktop-agent
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win --x64
+        run: npx electron-builder --win --x64 --publish never
 
       - name: List build output
         working-directory: desktop-agent
@@ -52,21 +52,15 @@ jobs:
           echo "Build directory contents:"
           Get-ChildItem -Path build -Recurse | Select-Object FullName
 
-      - name: Upload Windows installer
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-installer
           path: |
             desktop-agent/build/*.exe
+            desktop-agent/build/*.yml
+            desktop-agent/build/*.blockmap
           if-no-files-found: warn
-
-      - name: Upload Windows portable
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-portable
-          path: |
-            desktop-agent/build/*-Portable-*.exe
-          if-no-files-found: ignore
 
   build-macos:
     runs-on: macos-latest
@@ -96,7 +90,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npx electron-builder --mac --x64
+        run: npx electron-builder --mac --x64 --publish never
 
       - name: List build output
         working-directory: desktop-agent
@@ -104,13 +98,15 @@ jobs:
           echo "Build directory contents:"
           ls -laR build/
 
-      - name: Upload macOS DMG
+      - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
           path: |
             desktop-agent/build/*.dmg
             desktop-agent/build/*.zip
+            desktop-agent/build/*.yml
+            desktop-agent/build/*.blockmap
           if-no-files-found: warn
 
   build-macos-arm:
@@ -141,7 +137,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npx electron-builder --mac --arm64
+        run: npx electron-builder --mac --arm64 --publish never
 
       - name: List build output
         working-directory: desktop-agent
@@ -149,13 +145,15 @@ jobs:
           echo "Build directory contents:"
           ls -laR build/
 
-      - name: Upload macOS ARM DMG
+      - name: Upload macOS ARM artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-arm-dmg
           path: |
             desktop-agent/build/*-arm64*.dmg
             desktop-agent/build/*-arm64*.zip
+            desktop-agent/build/*.yml
+            desktop-agent/build/*.blockmap
           if-no-files-found: warn
 
   build-linux:
@@ -185,7 +183,7 @@ jobs:
         working-directory: desktop-agent
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --linux --x64
+        run: npx electron-builder --linux --x64 --publish never
 
       - name: List build output
         working-directory: desktop-agent
@@ -193,18 +191,14 @@ jobs:
           echo "Build directory contents:"
           ls -laR build/
 
-      - name: Upload Linux AppImage
+      - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linux-appimage
-          path: desktop-agent/build/*.AppImage
-          if-no-files-found: warn
-
-      - name: Upload Linux deb
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-deb
-          path: desktop-agent/build/*.deb
+          name: linux-artifacts
+          path: |
+            desktop-agent/build/*.AppImage
+            desktop-agent/build/*.deb
+            desktop-agent/build/*.yml
           if-no-files-found: warn
 
   release:
@@ -226,36 +220,34 @@ jobs:
         run: |
           mkdir -p release-files
           
-          # Copy Windows installer
+          # Copy Windows files (installer + auto-update files)
           if [ -d "artifacts/windows-installer" ]; then
             cp artifacts/windows-installer/*.exe release-files/ 2>/dev/null || true
+            cp artifacts/windows-installer/*.yml release-files/ 2>/dev/null || true
+            cp artifacts/windows-installer/*.blockmap release-files/ 2>/dev/null || true
           fi
           
-          # Copy Windows portable
-          if [ -d "artifacts/windows-portable" ]; then
-            cp artifacts/windows-portable/*.exe release-files/ 2>/dev/null || true
-          fi
-          
-          # Copy macOS DMG
+          # Copy macOS DMG files
           if [ -d "artifacts/macos-dmg" ]; then
             cp artifacts/macos-dmg/*.dmg release-files/ 2>/dev/null || true
             cp artifacts/macos-dmg/*.zip release-files/ 2>/dev/null || true
+            cp artifacts/macos-dmg/*.yml release-files/ 2>/dev/null || true
+            cp artifacts/macos-dmg/*.blockmap release-files/ 2>/dev/null || true
           fi
           
-          # Copy macOS ARM DMG
+          # Copy macOS ARM DMG files
           if [ -d "artifacts/macos-arm-dmg" ]; then
             cp artifacts/macos-arm-dmg/*.dmg release-files/ 2>/dev/null || true
             cp artifacts/macos-arm-dmg/*.zip release-files/ 2>/dev/null || true
+            cp artifacts/macos-arm-dmg/*.yml release-files/ 2>/dev/null || true
+            cp artifacts/macos-arm-dmg/*.blockmap release-files/ 2>/dev/null || true
           fi
           
-          # Copy Linux AppImage
-          if [ -d "artifacts/linux-appimage" ]; then
-            cp artifacts/linux-appimage/*.AppImage release-files/ 2>/dev/null || true
-          fi
-          
-          # Copy Linux deb
-          if [ -d "artifacts/linux-deb" ]; then
-            cp artifacts/linux-deb/*.deb release-files/ 2>/dev/null || true
+          # Copy Linux files
+          if [ -d "artifacts/linux-artifacts" ]; then
+            cp artifacts/linux-artifacts/*.AppImage release-files/ 2>/dev/null || true
+            cp artifacts/linux-artifacts/*.deb release-files/ 2>/dev/null || true
+            cp artifacts/linux-artifacts/*.yml release-files/ 2>/dev/null || true
           fi
           
           echo "Release files:"
