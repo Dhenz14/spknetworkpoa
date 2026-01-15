@@ -1,7 +1,8 @@
 {
   "name": "spk-desktop-agent",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "SPK Network Desktop Agent - Earn HBD by providing IPFS storage",
+  "homepage": "https://github.com/Dhenz14/spknetworkpoa",
   "main": "./dist/main/index.js",
   "scripts": {
     "dev": "cross-env NODE_ENV=development electron .",
@@ -15,7 +16,10 @@
     "postinstall": "electron-builder install-app-deps",
     "download-kubo": "node scripts/download-kubo.js"
   },
-  "author": "SPK Network",
+  "author": {
+    "name": "SPK Network",
+    "email": "info@spk.network"
+  },
   "license": "GPL-3.0",
   "devDependencies": {
     "@types/express": "^4.17.21",
@@ -82,7 +86,8 @@
     "linux": {
       "target": ["AppImage", "deb"],
       "category": "Utility",
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.png",
+      "maintainer": "SPK Network <info@spk.network>"
     }
   }
 }
