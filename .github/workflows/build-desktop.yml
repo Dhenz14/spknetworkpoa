@@ -2,19 +2,18 @@ name: Build Desktop Agent
 
 on:
   push:
+    tags:
+      - 'v*'
     branches:
       - main
     paths:
       - 'desktop-agent/**'
-  release:
-    types: [created]
   workflow_dispatch:
     inputs:
-      create_release:
-        description: 'Create a new release'
+      version:
+        description: 'Version to release (e.g., 1.0.2)'
         required: false
-        default: 'true'
-        type: boolean
+        type: string
 
 jobs:
   build-windows:
@@ -44,7 +43,13 @@ jobs:
         working-directory: desktop-agent
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win --x64 --publish never
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            npx electron-builder --win --x64 --publish always
+          else
+            npx electron-builder --win --x64 --publish never
+          fi
+        shell: bash
 
       - name: List build output
         working-directory: desktop-agent
@@ -90,7 +95,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npx electron-builder --mac --x64 --publish never
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            npx electron-builder --mac --x64 --publish always
+          else
+            npx electron-builder --mac --x64 --publish never
+          fi
 
       - name: List build output
         working-directory: desktop-agent
@@ -137,7 +147,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npx electron-builder --mac --arm64 --publish never
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            npx electron-builder --mac --arm64 --publish always
+          else
+            npx electron-builder --mac --arm64 --publish never
+          fi
 
       - name: List build output
         working-directory: desktop-agent
@@ -183,7 +198,12 @@ jobs:
         working-directory: desktop-agent
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --linux --x64 --publish never
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            npx electron-builder --linux --x64 --publish always
+          else
+            npx electron-builder --linux --x64 --publish never
+          fi
 
       - name: List build output
         working-directory: desktop-agent
@@ -204,7 +224,7 @@ jobs:
   release:
     needs: [build-windows, build-macos, build-macos-arm, build-linux]
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
     
@@ -253,22 +273,22 @@ jobs:
           echo "Release files:"
           ls -la release-files/
 
-      - name: Delete existing latest release
+      - name: Delete existing dev-latest release
         run: |
-          gh release delete latest --yes || true
-          git push origin :refs/tags/latest || true
+          gh release delete dev-latest --yes || true
+          git push origin :refs/tags/dev-latest || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create Latest Release
+      - name: Create Dev Latest Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: "SPK Desktop Agent - Latest Build"
+          tag_name: dev-latest
+          name: "SPK Desktop Agent - Development Build"
           body: |
-            ## SPK Desktop Agent - One-Click Installers
+            ## SPK Desktop Agent - Development Build
             
-            **Auto-updated on every push to main.**
+            **This is a development build for testing. For stable releases, download a versioned release (v1.x.x).**
             
             ### Download for your platform:
             
@@ -280,15 +300,10 @@ jobs:
             | **Linux** | `SPK-Desktop-Agent-*.AppImage` | `chmod +x` then double-click |
             | **Linux (Debian)** | `SPK-Desktop-Agent-*.deb` | `sudo dpkg -i` to install |
             
-            ### After Installation:
-            1. Launch **SPK Desktop Agent** from your applications
-            2. The app runs in your system tray/menu bar
-            3. Link your Hive account to start earning HBD rewards
-            
             Built from commit: ${{ github.sha }}
           files: release-files/*
           draft: false
-          prerelease: false
+          prerelease: true
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
