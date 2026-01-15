@@ -41,14 +41,17 @@ export class ApiServer {
     this.app.get('/api/status', async (req: Request, res: Response) => {
       const peerId = await this.kubo.getPeerId();
       const stats = await this.kubo.getStats();
-      const config = this.config.getConfig();
+      const configData = this.config.getConfig();
       const earnings = this.config.getEarnings();
 
       res.json({
         running: this.kubo.isRunning(),
         peerId,
         stats,
-        hiveUsername: config.hiveUsername,
+        config: {
+          hiveUsername: configData.hiveUsername,
+          autoStart: configData.autoStart,
+        },
         earnings,
         version: '1.0.0',
       });

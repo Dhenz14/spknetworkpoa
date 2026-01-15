@@ -12,6 +12,7 @@ export interface File {
   confidence: number;
   poaEnabled: boolean;
   createdAt: string;
+  earnedHbd: number;
 }
 
 export interface StorageNode {

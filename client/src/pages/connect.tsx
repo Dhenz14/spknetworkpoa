@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,21 +32,33 @@ import { formatBytes, testBackendIPFSConnection, type ConnectionMode } from "@/l
 interface DesktopAgentStatusResponse {
   running: boolean;
   peerId: string | null;
-  stats: {
+  // Nested format (expected)
+  stats?: {
     repoSize: number;
     numObjects: number;
     bandwidthIn: number;
     bandwidthOut: number;
   } | null;
-  config: {
+  config?: {
     hiveUsername: string;
     autoStart: boolean;
   } | null;
-  earnings: {
+  earnings?: {
     totalHbd: string;
     challengesPassed: number;
     streak: number;
   } | null;
+  // Flat format (desktop agent may return these at top level)
+  hiveUsername?: string;
+  autoStart?: boolean;
+  repoSize?: number;
+  numObjects?: number;
+  bandwidthIn?: number;
+  bandwidthOut?: number;
+  totalHbd?: string;
+  challengesPassed?: number;
+  streak?: number;
+  version?: string;
 }
 
 const DESKTOP_AGENT_URL = "http://localhost:5111";
@@ -69,8 +81,14 @@ export default function Connect() {
 
   const [desktopAgentStatus, setDesktopAgentStatus] = useState<DesktopAgentStatusResponse | null>(null);
   const [isPollingAgent, setIsPollingAgent] = useState(false);
+  const isPollingRef = useRef<boolean>(false);
 
   const pollDesktopAgent = useCallback(async () => {
+    if (isPollingRef.current) {
+      return;
+    }
+    isPollingRef.current = true;
+
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 2000);
@@ -90,6 +108,8 @@ export default function Connect() {
       }
     } catch {
       setDesktopAgentStatus(null);
+    } finally {
+      isPollingRef.current = false;
     }
   }, []);
 
@@ -105,6 +125,38 @@ export default function Connect() {
     };
   }, [pollDesktopAgent]);
 
+  const getHiveUsername = (status: DesktopAgentStatusResponse | null): string => {
+    if (!status) return "";
+    return status.config?.hiveUsername || status.hiveUsername || "";
+  };
+
+  const getStats = (status: DesktopAgentStatusResponse | null) => {
+    if (!status) return null;
+    if (status.stats) return status.stats;
+    if (status.repoSize !== undefined || status.numObjects !== undefined) {
+      return {
+        repoSize: status.repoSize ?? 0,
+        numObjects: status.numObjects ?? 0,
+        bandwidthIn: status.bandwidthIn ?? 0,
+        bandwidthOut: status.bandwidthOut ?? 0,
+      };
+    }
+    return null;
+  };
+
+  const getEarnings = (status: DesktopAgentStatusResponse | null) => {
+    if (!status) return null;
+    if (status.earnings) return status.earnings;
+    if (status.totalHbd !== undefined || status.challengesPassed !== undefined) {
+      return {
+        totalHbd: status.totalHbd ?? "0 HBD",
+        challengesPassed: status.challengesPassed ?? 0,
+        streak: status.streak ?? 0,
+      };
+    }
+    return null;
+  };
+
   const handleConnectToDesktopAgent = () => {
     if (desktopAgentStatus?.running && desktopAgentStatus.peerId) {
       setMode("local");
@@ -113,7 +165,7 @@ export default function Connect() {
         ipfsGatewayUrl: `${DESKTOP_AGENT_URL}/gateway`,
         isConnected: true,
         peerId: desktopAgentStatus.peerId,
-        hiveUsername: desktopAgentStatus.config?.hiveUsername || "",
+        hiveUsername: getHiveUsername(desktopAgentStatus),
       });
       toast({
         title: "Connected to Desktop Agent!",
@@ -374,66 +426,75 @@ export default function Connect() {
                 </div>
               )}
 
-              {desktopAgentStatus.stats && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="p-3 bg-muted/50 rounded-lg text-center">
-                    <p className="text-xl font-bold" data-testid="text-agent-repo-size">
-                      {formatBytes(desktopAgentStatus.stats.repoSize)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Storage Used</p>
-                  </div>
-                  <div className="p-3 bg-muted/50 rounded-lg text-center">
-                    <p className="text-xl font-bold" data-testid="text-agent-num-objects">
-                      {desktopAgentStatus.stats.numObjects.toLocaleString()}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Objects</p>
-                  </div>
-                  <div className="p-3 bg-muted/50 rounded-lg text-center">
-                    <p className="text-xl font-bold" data-testid="text-agent-bandwidth-in">
-                      {formatBytes(desktopAgentStatus.stats.bandwidthIn)}/s
-                    </p>
-                    <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-                      <Activity className="h-3 w-3" /> In
-                    </p>
-                  </div>
-                  <div className="p-3 bg-muted/50 rounded-lg text-center">
-                    <p className="text-xl font-bold" data-testid="text-agent-bandwidth-out">
-                      {formatBytes(desktopAgentStatus.stats.bandwidthOut)}/s
-                    </p>
-                    <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-                      <Activity className="h-3 w-3" /> Out
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {desktopAgentStatus.earnings && (
-                <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Zap className="h-4 w-4 text-green-500" />
-                      <span className="text-sm font-medium">Earnings</span>
+              {(() => {
+                const stats = getStats(desktopAgentStatus);
+                return stats && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="p-3 bg-muted/50 rounded-lg text-center">
+                      <p className="text-xl font-bold" data-testid="text-agent-repo-size">
+                        {formatBytes(stats.repoSize)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Storage Used</p>
                     </div>
-                    <span className="font-bold text-green-600" data-testid="text-agent-total-hbd">
-                      {desktopAgentStatus.earnings.totalHbd}
-                    </span>
+                    <div className="p-3 bg-muted/50 rounded-lg text-center">
+                      <p className="text-xl font-bold" data-testid="text-agent-num-objects">
+                        {stats.numObjects.toLocaleString()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Objects</p>
+                    </div>
+                    <div className="p-3 bg-muted/50 rounded-lg text-center">
+                      <p className="text-xl font-bold" data-testid="text-agent-bandwidth-in">
+                        {formatBytes(stats.bandwidthIn)}/s
+                      </p>
+                      <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                        <Activity className="h-3 w-3" /> In
+                      </p>
+                    </div>
+                    <div className="p-3 bg-muted/50 rounded-lg text-center">
+                      <p className="text-xl font-bold" data-testid="text-agent-bandwidth-out">
+                        {formatBytes(stats.bandwidthOut)}/s
+                      </p>
+                      <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                        <Activity className="h-3 w-3" /> Out
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-                    <span data-testid="text-agent-challenges">
-                      {desktopAgentStatus.earnings.challengesPassed} challenges passed
-                    </span>
-                    <span data-testid="text-agent-streak">
-                      {desktopAgentStatus.earnings.streak} day streak
-                    </span>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
-              {desktopAgentStatus.config?.hiveUsername && (
-                <p className="text-sm text-muted-foreground">
-                  Hive Account: <span className="font-medium" data-testid="text-agent-hive-username">@{desktopAgentStatus.config.hiveUsername}</span>
-                </p>
-              )}
+              {(() => {
+                const earnings = getEarnings(desktopAgentStatus);
+                return earnings && (
+                  <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Zap className="h-4 w-4 text-green-500" />
+                        <span className="text-sm font-medium">Earnings</span>
+                      </div>
+                      <span className="font-bold text-green-600" data-testid="text-agent-total-hbd">
+                        {earnings.totalHbd}
+                      </span>
+                    </div>
+                    <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+                      <span data-testid="text-agent-challenges">
+                        {earnings.challengesPassed} challenges passed
+                      </span>
+                      <span data-testid="text-agent-streak">
+                        {earnings.streak} day streak
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {(() => {
+                const hiveUsername = getHiveUsername(desktopAgentStatus);
+                return hiveUsername && (
+                  <p className="text-sm text-muted-foreground">
+                    Hive Account: <span className="font-medium" data-testid="text-agent-hive-username">@{hiveUsername}</span>
+                  </p>
+                );
+              })()}
 
               <Button
                 onClick={handleConnectToDesktopAgent}
