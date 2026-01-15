@@ -8,18 +8,46 @@ on:
       - main
     paths:
       - 'desktop-agent/**'
+      - '.github/workflows/build-desktop.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'desktop-agent/**'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to release (e.g., 1.0.2)'
-        required: false
-        type: string
+
+permissions:
+  contents: write
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  build:
+    runs-on: ${{ matrix.os }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: false
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win32
+            arch: x64
+            build_cmd: npx electron-builder --win --x64
+          - os: macos-latest
+            platform: darwin
+            arch: x64
+            build_cmd: npx electron-builder --mac --x64
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+            build_cmd: npx electron-builder --mac --arm64
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            build_cmd: npx electron-builder --linux --x64
+
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -33,93 +61,45 @@ jobs:
 
       - name: Download Kubo binary
         working-directory: desktop-agent
-        run: node scripts/download-kubo.js win32-x64
+        run: node scripts/download-kubo.js ${{ matrix.platform }}-${{ matrix.arch }}
 
-      - name: Build application
+      - name: Build TypeScript
         working-directory: desktop-agent
         run: npm run build
 
-      - name: Package Windows installer (with publish)
+      - name: Package and publish to GitHub (tag releases only)
         if: startsWith(github.ref, 'refs/tags/v')
         working-directory: desktop-agent
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win --x64 --publish always
-        shell: bash
+        run: ${{ matrix.build_cmd }} --publish always
 
-      - name: Package Windows installer (no publish)
+      - name: Package without publishing (non-tag builds)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         working-directory: desktop-agent
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win --x64 --publish never
-        shell: bash
+        run: ${{ matrix.build_cmd }} --publish never
 
-      - name: List build output
+      - name: List build outputs
         working-directory: desktop-agent
+        shell: bash
         run: |
-          echo "Build directory contents:"
-          Get-ChildItem -Path build -Recurse | Select-Object FullName
+          echo "=== Build outputs ==="
+          ls -la build/ 2>/dev/null || dir build 2>/dev/null || echo "No build directory"
 
       - name: Upload Windows artifacts
+        if: matrix.platform == 'win32'
         uses: actions/upload-artifact@v4
         with:
-          name: windows-installer
+          name: windows-${{ matrix.arch }}
           path: |
             desktop-agent/build/*.exe
             desktop-agent/build/*.yml
             desktop-agent/build/*.blockmap
           if-no-files-found: warn
 
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install dependencies
-        working-directory: desktop-agent
-        run: npm install
-
-      - name: Download Kubo binary (Intel)
-        working-directory: desktop-agent
-        run: node scripts/download-kubo.js darwin-x64
-
-      - name: Build application
-        working-directory: desktop-agent
-        run: npm run build
-
-      - name: Package macOS DMG (with publish)
-        if: startsWith(github.ref, 'refs/tags/v')
-        working-directory: desktop-agent
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npx electron-builder --mac --x64 --publish always
-
-      - name: Package macOS DMG (no publish)
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        working-directory: desktop-agent
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npx electron-builder --mac --x64 --publish never
-
-      - name: List build output
-        working-directory: desktop-agent
-        run: |
-          echo "Build directory contents:"
-          ls -laR build/
-
       - name: Upload macOS artifacts
+        if: matrix.platform == 'darwin'
         uses: actions/upload-artifact@v4
         with:
-          name: macos-dmg
+          name: macos-${{ matrix.arch }}
           path: |
             desktop-agent/build/*.dmg
             desktop-agent/build/*.zip
@@ -127,198 +107,13 @@ jobs:
             desktop-agent/build/*.blockmap
           if-no-files-found: warn
 
-  build-macos-arm:
-    runs-on: macos-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install dependencies
-        working-directory: desktop-agent
-        run: npm install
-
-      - name: Download Kubo binary (ARM)
-        working-directory: desktop-agent
-        run: node scripts/download-kubo.js darwin-arm64
-
-      - name: Build application
-        working-directory: desktop-agent
-        run: npm run build
-
-      - name: Package macOS ARM DMG (with publish)
-        if: startsWith(github.ref, 'refs/tags/v')
-        working-directory: desktop-agent
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npx electron-builder --mac --arm64 --publish always
-
-      - name: Package macOS ARM DMG (no publish)
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        working-directory: desktop-agent
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npx electron-builder --mac --arm64 --publish never
-
-      - name: List build output
-        working-directory: desktop-agent
-        run: |
-          echo "Build directory contents:"
-          ls -laR build/
-
-      - name: Upload macOS ARM artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-arm-dmg
-          path: |
-            desktop-agent/build/*-arm64*.dmg
-            desktop-agent/build/*-arm64*.zip
-            desktop-agent/build/*.yml
-            desktop-agent/build/*.blockmap
-          if-no-files-found: warn
-
-  build-linux:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install dependencies
-        working-directory: desktop-agent
-        run: npm install
-
-      - name: Download Kubo binary
-        working-directory: desktop-agent
-        run: node scripts/download-kubo.js linux-x64
-
-      - name: Build application
-        working-directory: desktop-agent
-        run: npm run build
-
-      - name: Package Linux AppImage and deb (with publish)
-        if: startsWith(github.ref, 'refs/tags/v')
-        working-directory: desktop-agent
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --linux --x64 --publish always
-
-      - name: Package Linux AppImage and deb (no publish)
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        working-directory: desktop-agent
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --linux --x64 --publish never
-
-      - name: List build output
-        working-directory: desktop-agent
-        run: |
-          echo "Build directory contents:"
-          ls -laR build/
-
       - name: Upload Linux artifacts
+        if: matrix.platform == 'linux'
         uses: actions/upload-artifact@v4
         with:
-          name: linux-artifacts
+          name: linux-${{ matrix.arch }}
           path: |
             desktop-agent/build/*.AppImage
             desktop-agent/build/*.deb
             desktop-agent/build/*.yml
           if-no-files-found: warn
-
-  release:
-    needs: [build-windows, build-macos, build-macos-arm, build-linux]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-    permissions:
-      contents: write
-    
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Prepare release files
-        run: |
-          mkdir -p release-files
-          
-          # Copy Windows files (installer + auto-update files)
-          if [ -d "artifacts/windows-installer" ]; then
-            cp artifacts/windows-installer/*.exe release-files/ 2>/dev/null || true
-            cp artifacts/windows-installer/*.yml release-files/ 2>/dev/null || true
-            cp artifacts/windows-installer/*.blockmap release-files/ 2>/dev/null || true
-          fi
-          
-          # Copy macOS DMG files
-          if [ -d "artifacts/macos-dmg" ]; then
-            cp artifacts/macos-dmg/*.dmg release-files/ 2>/dev/null || true
-            cp artifacts/macos-dmg/*.zip release-files/ 2>/dev/null || true
-            cp artifacts/macos-dmg/*.yml release-files/ 2>/dev/null || true
-            cp artifacts/macos-dmg/*.blockmap release-files/ 2>/dev/null || true
-          fi
-          
-          # Copy macOS ARM DMG files
-          if [ -d "artifacts/macos-arm-dmg" ]; then
-            cp artifacts/macos-arm-dmg/*.dmg release-files/ 2>/dev/null || true
-            cp artifacts/macos-arm-dmg/*.zip release-files/ 2>/dev/null || true
-            cp artifacts/macos-arm-dmg/*.yml release-files/ 2>/dev/null || true
-            cp artifacts/macos-arm-dmg/*.blockmap release-files/ 2>/dev/null || true
-          fi
-          
-          # Copy Linux files
-          if [ -d "artifacts/linux-artifacts" ]; then
-            cp artifacts/linux-artifacts/*.AppImage release-files/ 2>/dev/null || true
-            cp artifacts/linux-artifacts/*.deb release-files/ 2>/dev/null || true
-            cp artifacts/linux-artifacts/*.yml release-files/ 2>/dev/null || true
-          fi
-          
-          echo "Release files:"
-          ls -la release-files/
-
-      - name: Delete existing dev-latest release
-        run: |
-          gh release delete dev-latest --yes || true
-          git push origin :refs/tags/dev-latest || true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create Dev Latest Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: dev-latest
-          name: "SPK Desktop Agent - Development Build"
-          body: |
-            ## SPK Desktop Agent - Development Build
-            
-            **This is a development build for testing. For stable releases, download a versioned release (v1.x.x).**
-            
-            ### Download for your platform:
-            
-            | Platform | File | Instructions |
-            |----------|------|--------------|
-            | **Windows** | `SPK-Desktop-Agent-Setup-*.exe` | Run installer, creates desktop shortcut |
-            | **macOS (Intel)** | `SPK-Desktop-Agent-*.dmg` | Open DMG, drag to Applications |
-            | **macOS (Apple Silicon)** | `SPK-Desktop-Agent-*-arm64.dmg` | Open DMG, drag to Applications |
-            | **Linux** | `SPK-Desktop-Agent-*.AppImage` | `chmod +x` then double-click |
-            | **Linux (Debian)** | `SPK-Desktop-Agent-*.deb` | `sudo dpkg -i` to install |
-            
-            Built from commit: ${{ github.sha }}
-          files: release-files/*
-          draft: false
-          prerelease: true
-          fail_on_unmatched_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
