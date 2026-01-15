@@ -8,6 +8,12 @@ SPK Network 2.0 (HivePoA) is a decentralized storage validation protocol that in
 
 Preferred communication style: Simple, everyday language.
 
+## Project Repository
+
+GitHub Repository: https://github.com/Dhenz14/spknetworkpoa
+- Desktop agent changes should be pushed to this repository
+- GitHub Actions workflow triggers on version tags (v*) for automated builds
+
 ## System Architecture
 
 ### Hybrid PWA Architecture
