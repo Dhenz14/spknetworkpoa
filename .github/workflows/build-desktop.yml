@@ -39,16 +39,20 @@ jobs:
         working-directory: desktop-agent
         run: npm run build
 
-      - name: Package Windows installer
+      - name: Package Windows installer (with publish)
+        if: startsWith(github.ref, 'refs/tags/v')
         working-directory: desktop-agent
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            npx electron-builder --win --x64 --publish always
-          else
-            npx electron-builder --win --x64 --publish never
-          fi
+        run: npx electron-builder --win --x64 --publish always
+        shell: bash
+
+      - name: Package Windows installer (no publish)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        working-directory: desktop-agent
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win --x64 --publish never
         shell: bash
 
       - name: List build output
@@ -90,17 +94,21 @@ jobs:
         working-directory: desktop-agent
         run: npm run build
 
-      - name: Package macOS DMG
+      - name: Package macOS DMG (with publish)
+        if: startsWith(github.ref, 'refs/tags/v')
         working-directory: desktop-agent
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            npx electron-builder --mac --x64 --publish always
-          else
-            npx electron-builder --mac --x64 --publish never
-          fi
+        run: npx electron-builder --mac --x64 --publish always
+
+      - name: Package macOS DMG (no publish)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        working-directory: desktop-agent
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npx electron-builder --mac --x64 --publish never
 
       - name: List build output
         working-directory: desktop-agent
@@ -142,17 +150,21 @@ jobs:
         working-directory: desktop-agent
         run: npm run build
 
-      - name: Package macOS ARM DMG
+      - name: Package macOS ARM DMG (with publish)
+        if: startsWith(github.ref, 'refs/tags/v')
         working-directory: desktop-agent
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            npx electron-builder --mac --arm64 --publish always
-          else
-            npx electron-builder --mac --arm64 --publish never
-          fi
+        run: npx electron-builder --mac --arm64 --publish always
+
+      - name: Package macOS ARM DMG (no publish)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        working-directory: desktop-agent
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npx electron-builder --mac --arm64 --publish never
 
       - name: List build output
         working-directory: desktop-agent
@@ -194,16 +206,19 @@ jobs:
         working-directory: desktop-agent
         run: npm run build
 
-      - name: Package Linux AppImage and deb
+      - name: Package Linux AppImage and deb (with publish)
+        if: startsWith(github.ref, 'refs/tags/v')
         working-directory: desktop-agent
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            npx electron-builder --linux --x64 --publish always
-          else
-            npx electron-builder --linux --x64 --publish never
-          fi
+        run: npx electron-builder --linux --x64 --publish always
+
+      - name: Package Linux AppImage and deb (no publish)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        working-directory: desktop-agent
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --linux --x64 --publish never
 
       - name: List build output
         working-directory: desktop-agent

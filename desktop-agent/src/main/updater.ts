@@ -1,5 +1,5 @@
-import { autoUpdater, UpdateInfo, ProgressInfo } from 'electron-updater';
-import { app, dialog, BrowserWindow, Notification, MessageBoxReturnValue } from 'electron';
+import { autoUpdater } from 'electron-updater';
+import { app, dialog, BrowserWindow, Notification } from 'electron';
 
 export class AutoUpdater {
   private mainWindow: BrowserWindow | null = null;
@@ -21,7 +21,7 @@ export class AutoUpdater {
       console.log('[SPK] Checking for updates...');
     });
 
-    autoUpdater.on('update-available', (info: UpdateInfo) => {
+    autoUpdater.on('update-available', (info: any) => {
       console.log('[SPK] Update available:', info.version);
       this.updateAvailable = true;
       
@@ -37,11 +37,11 @@ export class AutoUpdater {
       console.log('[SPK] App is up to date');
     });
 
-    autoUpdater.on('download-progress', (progress: ProgressInfo) => {
+    autoUpdater.on('download-progress', (progress: any) => {
       console.log(`[SPK] Download progress: ${Math.round(progress.percent)}%`);
     });
 
-    autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
+    autoUpdater.on('update-downloaded', (info: any) => {
       console.log('[SPK] Update downloaded:', info.version);
       
       dialog.showMessageBox({
@@ -51,7 +51,7 @@ export class AutoUpdater {
         detail: 'The update will be installed when you restart the app.',
         buttons: ['Restart Now', 'Later'],
         defaultId: 0,
-      }).then((result: MessageBoxReturnValue) => {
+      }).then((result: any) => {
         if (result.response === 0) {
           autoUpdater.quitAndInstall(false, true);
         }
